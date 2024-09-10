@@ -1,0 +1,114 @@
+{
+  "arts": [
+    "Arts"
+  ],
+  "fantasy": [
+    "Fantasy"
+  ],
+  "history": [
+    "History"
+  ],
+  "horror": [
+    "Horror"
+  ],
+  "historical_fiction": [
+    "Historical Fiction"
+  ],
+  "humor": [
+    "Humor"
+  ],
+  "literature": [
+    "Literature"
+  ],
+  "mystery_and_detective_stories": [
+    "Mistery",
+    "Detective"
+  ],
+  "poetry": [
+    "Poetry",
+    "Poem"
+  ],
+  "romance": [
+    "Romance",
+    "Love"
+  ],
+  "science_fiction": [
+    "Science Fiction"
+  ],
+  "juvenile_fiction": [
+    "Juvenile"
+  ],
+  "mathematics": [
+    "Maths",
+    "Mathematics"
+  ],
+  "thriller": [
+    "Thriller",
+    "Crime"
+  ],
+  "young_adult_fiction": [
+    "Young Adult"
+  ],
+  "biography": [
+    "Biography"
+  ],
+  "nonfiction": [
+    "Nonfiction",
+    "Non Fiction",
+    "Non-Fiction"
+  ],
+  "action": [
+    "Action"
+  ],
+  "fashion": [
+    "Fashion"
+  ],
+  "film": [
+    "Film",
+    "Movie",
+    "Cinema"
+  ],
+  "music": [
+    "Music"
+  ],
+  "animals": [
+    "Animals"
+  ],
+  "plays": [
+    "Plays"
+  ],
+  "health": [
+    "Health",
+    "Medicine"
+  ],
+  "cooking": [
+    "Cooking",
+    "Cook"
+  ],
+  "business": [
+    "Business"
+  ],
+  "nutrition": [
+    "Nutrition"
+  ],
+  "social_sciences": [
+    "Social Science"
+  ],
+  "geography": [
+    "Geography"
+  ],
+  "religion": [
+    "Religion"
+  ],
+  "psychology": [
+    "Psychology"
+  ],
+  "mental_health": [
+    "Mental Health"
+  ],
+  "exercise": [
+    "Exercise",
+    "Gym",
+    "Fitness"
+  ]
+}
