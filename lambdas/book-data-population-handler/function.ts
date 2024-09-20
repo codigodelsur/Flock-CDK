@@ -165,7 +165,7 @@ async function getOpenLibraryAuthor(olid: string) {
 
 function getSubjectByText(text: string) {
   for (const subject in SUBJECTS) {
-    if (text.includes(SUBJECTS[subject])) {
+    if (SUBJECTS[subject].includes(text)) {
       return subject;
     }
   }

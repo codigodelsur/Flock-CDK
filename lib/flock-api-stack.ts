@@ -8,6 +8,8 @@ import { Effect, Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 
 export class FlockApiStack extends cdk.Stack {
+  public readonly imagesBucket: Bucket;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -124,7 +126,7 @@ export class FlockApiStack extends cdk.Stack {
 
     // S3 Bucket (Images)
 
-    const imagesBucket = new Bucket(this, 'flock-images', {
+    this.imagesBucket = new Bucket(this, 'flock-images', {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
     });
 
@@ -171,7 +173,7 @@ export class FlockApiStack extends cdk.Stack {
                   { name: 'DB_PORT', value: '5432' },
                   { name: 'DB_SSL', value: 'true' },
                   { name: 'DB_USER', value: 'postgres' },
-                  { name: 'IMAGES_BUCKET', value: imagesBucket.bucketName },
+                  { name: 'IMAGES_BUCKET', value: this.imagesBucket.bucketName },
                   {
                     name: 'OPEN_LIBRARY_COVERS_URL',
                     value: 'https://covers.openlibrary.org',
