@@ -6,7 +6,7 @@ import { FlockWebStack } from '../lib/flock-web-stack';
 import { FlockRecommendationStack } from '../lib/flock-recommendation-stack';
 import { FlockBookDataPopulationStack } from '../lib/flock-book-data-population-stack';
 import { FlockBookSyncStack } from '../lib/flock-book-sync-stack';
-import { IBucket } from 'aws-cdk-lib/aws-s3';
+import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
 
 const app = new cdk.App();
 
@@ -14,7 +14,7 @@ const REGION = 'us-east-1';
 const ACCOUNT = '431027017019';
 const env = { region: REGION, account: ACCOUNT };
 
-const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
+const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
   app,
   'FlockBookDataPopulationStack-Dev',
   'dev',
@@ -24,7 +24,7 @@ const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
   }
 );
 
-const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
+const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
   app,
   'FlockBookDataPopulationStack-Stage',
   'stage',
@@ -68,6 +68,16 @@ const bookSyncStackDev = new FlockBookSyncStack(
   }
 );
 
+const bookSyncStackStage = new FlockBookSyncStack(
+  app,
+  'FlockBookSyncStack-Stage',
+  'stage',
+  {
+    stackName: 'flock-book-sync-stage',
+    env
+  }
+);
+
 export interface SyncStackProps extends cdk.StackProps {
-  imagesBucket: IBucket;
+  imagesBucket?: IBucket;
 }

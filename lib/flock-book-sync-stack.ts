@@ -6,6 +6,7 @@ import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 import path = require('path');
 import { SyncStackProps } from '../bin/flock-cdk';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
 import 'dotenv/config';
 
 export class FlockBookSyncStack extends Stack {
@@ -18,6 +19,18 @@ export class FlockBookSyncStack extends Stack {
     super(scope, id, props);
 
     const projectRoot = path.resolve(__dirname, '../lambdas/book-sync-handler');
+
+    let imagesBucket;
+
+    if (!props.imagesBucket) {
+      imagesBucket = Bucket.fromBucketName(
+        this,
+        'flock-images-stage',
+        'flock-images-stage'
+      );
+    } else {
+      imagesBucket = props.imagesBucket;
+    }
 
     const handler = new NodejsFunction(this, `book-sync-handler-${workload}`, {
       functionName: `book-sync-handler-${workload}`,
@@ -33,7 +46,7 @@ export class FlockBookSyncStack extends Stack {
         DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
         DB_USER: process.env.DB_USER,
         DB_PASS: process.env.DB_PASS,
-        IMAGES_BUCKET: 'flock-api-dev-flockimages95de63b1-6uuwx9hyb7gv',
+        IMAGES_BUCKET: imagesBucket.bucketName,
         NY_TIMES_API_URL: 'https://api.nytimes.com/svc/books/v3',
         NY_TIMES_API_KEY: process.env.NY_TIMES_API_KEY,
       },
@@ -61,6 +74,6 @@ export class FlockBookSyncStack extends Stack {
 
     rule.addTarget(new LambdaFunction(handler));
 
-    props.imagesBucket.grantWrite(handler);
+    imagesBucket.grantWrite(handler);
   }
 }

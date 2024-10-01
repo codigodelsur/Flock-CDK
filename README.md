@@ -73,6 +73,7 @@ npm run bootstrap
 - `npm run test` perform the jest unit tests
 - `npx cdk deploy` deploy this stack to your default AWS account/region
 - `npx cdk deploy --hotswap` deploy just what changed
+- `npx cdk deploy [StackName]` deploy a specific stack
 - `npx cdk diff` compare deployed stack with current state
 - `npx cdk synth` emits the synthesized CloudFormation template
 

@@ -1,13 +1,28 @@
 {
+  "arts_hobbies": [
+    "Art",
+    "Antiques & Collectibles",
+    "Architecture",
+    "Crafts & Hobbies",
+    "Design",
+    "Drama",
+    "Games & Activities ",
+    "Music",
+    "Performing Arts",
+    "Photography",
+    "Poetry"
+  ],
   "biography_memoirs": [
     "Biography",
     "Biography & Autobiography",
-    "Biographies & Memoirs"
+    "Biographies & Memoirs",
+    "Memoirs"
   ],
-  "business_personal_finance": [
+  "business_finance": [
     "Business",
     "Business & Economics",
-    "Business & Personal Finance"
+    "Business & Finance",
+    "Finance"
   ],
   "comics_graphic_novels": [
     "Comics & Graphic Novels",
@@ -17,7 +32,8 @@
   "computers_internet": [
     "Computers & Internet",
     "Computers",
-    "Internet"
+    "Internet",
+    "Technology & Engineering"
   ],
   "cookbooks_food_wine": [
     "Cookbooks, Food & Wine",
@@ -27,22 +43,43 @@
     "Cooking"
   ],
   "education": [
-    "Education"
+    "Education",
+    "Foreign Language Study",
+    "Language Arts & Disciplines",
+    "Law",
+    "Mathematics",
+    "Medical",
+    "Philosophy",
+    "Psychology",
+    "Reference",
+    "Study Aids"
   ],
   "fiction_literature": [
     "Fiction",
     "Literature",
     "Young Adult Fiction",
     "Juvenile Fiction",
-    "Science Fiction"
+    "Science Fiction",
+    "Literary Collections",
+    "Literary Criticism",
+    "Historical"
   ],
-  "health_mind_body": [
-    "Health, Mind & Body",
-    "Health",
-    "Medicine"
+  "health_wellness": [
+    "Body, Mind & Spirit",
+    "Family & Relationships",
+    "Health & Fitness",
+    "House & Home",
+    "Pets"
+  ],
+  "travel": [
+    "Travel",
+    "Transportation"
   ],
   "history": [
     "History"
+  ],
+  "historical_fiction": [
+    "Historical"
   ],
   "kids": [
     "Kids",
@@ -55,9 +92,13 @@
     "Crime",
     "Mystery",
     "Detective",
-    "Mystery & Detective"
+    "Mystery & Detective",
+    "True Crime",
+    "Horror",
+    "Suspense"
   ],
   "nonfiction": [
+    "Biography & Autobiography",
     "Nonfiction",
     "Non Fiction",
     "Non-Fiction",
@@ -72,7 +113,8 @@
   "religion_spirituality": [
     "Religion & Spirituality",
     "Religion",
-    "Spirituality"
+    "Spirituality",
+    "Bibles"
   ],
   "romance": [
     "Romance",
@@ -84,10 +126,12 @@
     "Sci-Fi & Fantasy",
     "Science Fiction"
   ],
-  "sports": [
+  "sports_outdoors": [
     "Sports",
     "Sports & Recreation",
-    "Sports & Outdoors"
+    "Sports & Outdoors",
+    "Gardening",
+    "Nature"
   ],
   "young_adults": [
     "Young Adult",

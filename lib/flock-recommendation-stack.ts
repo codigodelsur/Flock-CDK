@@ -48,69 +48,69 @@ export class FlockRecommendationStack extends cdk.Stack {
       '../lambdas/user-recommendation-handler'
     );
 
-    const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
+    // const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
 
-    const securityGroup = SecurityGroup.fromSecurityGroupId(
-      this,
-      'security-group',
-      'sg-08800ce1e272b7f43'
-    );
+    // const securityGroup = SecurityGroup.fromSecurityGroupId(
+    //   this,
+    //   'security-group',
+    //   'sg-08800ce1e272b7f43'
+    // );
 
-    const rdsInstance = DatabaseInstance.fromDatabaseInstanceAttributes(
-      this,
-      'rds',
-      {
-        instanceEndpointAddress:
-          'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
-        instanceIdentifier: 'flock-db-stage',
-        port: 5432,
-        securityGroups: [securityGroup],
-        engine: DatabaseInstanceEngine.POSTGRES,
-      }
-    );
+    // const rdsInstance = DatabaseInstance.fromDatabaseInstanceAttributes(
+    //   this,
+    //   'rds',
+    //   {
+    //     instanceEndpointAddress:
+    //       'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
+    //     instanceIdentifier: 'flock-db-stage',
+    //     port: 5432,
+    //     securityGroups: [securityGroup],
+    //     engine: DatabaseInstanceEngine.POSTGRES,
+    //   }
+    // );
 
-    const secret = new Secret(this, 'rds-credentials-secret', {
-      secretName: `rds-credentials-secret-${workload}`,
-      secretObjectValue: {
-        username: new cdk.SecretValue('postgres'),
-        password: new cdk.SecretValue('Sa6Mh4y9H9MQKxknPeggmdY'),
-      },
-    });
+    // const secret = new Secret(this, 'rds-credentials-secret', {
+    //   secretName: `rds-credentials-secret-${workload}`,
+    //   secretObjectValue: {
+    //     username: new cdk.SecretValue('postgres'),
+    //     password: new cdk.SecretValue('Sa6Mh4y9H9MQKxknPeggmdY'),
+    //   },
+    // });
 
-    const dbConnectionGroup = new SecurityGroup(
-      this,
-      'Proxy to DB Connection',
-      {
-        vpc,
-      }
-    );
+    // const dbConnectionGroup = new SecurityGroup(
+    //   this,
+    //   'Proxy to DB Connection',
+    //   {
+    //     vpc,
+    //   }
+    // );
 
-    const lambdaToRDSProxyGroup = new SecurityGroup(
-      this,
-      'Lambda to RDS Proxy Connection',
-      {
-        vpc,
-      }
-    );
+    // const lambdaToRDSProxyGroup = new SecurityGroup(
+    //   this,
+    //   'Lambda to RDS Proxy Connection',
+    //   {
+    //     vpc,
+    //   }
+    // );
 
-    dbConnectionGroup.addIngressRule(
-      dbConnectionGroup,
-      Port.tcp(5432),
-      'allow db connection'
-    );
+    // dbConnectionGroup.addIngressRule(
+    //   dbConnectionGroup,
+    //   Port.tcp(5432),
+    //   'allow db connection'
+    // );
 
-    dbConnectionGroup.addIngressRule(
-      lambdaToRDSProxyGroup,
-      Port.tcp(5432),
-      'allow lambda connection'
-    );
+    // dbConnectionGroup.addIngressRule(
+    //   lambdaToRDSProxyGroup,
+    //   Port.tcp(5432),
+    //   'allow lambda connection'
+    // );
 
-    const rdsProxy = rdsInstance.addProxy(`${id}-proxy`, {
-      vpc,
-      secrets: [secret],
-      securityGroups: [dbConnectionGroup],
-      requireTLS: true,
-    });
+    // const rdsProxy = rdsInstance.addProxy(`${id}-proxy`, {
+    //   vpc,
+    //   secrets: [secret],
+    //   securityGroups: [dbConnectionGroup],
+    //   requireTLS: true,
+    // });
 
     // Lambda
     const handler = new NodejsFunction(
@@ -121,12 +121,12 @@ export class FlockRecommendationStack extends cdk.Stack {
         entry: path.join(projectRoot, 'function.ts'),
         depsLockFilePath: path.join(projectRoot, 'package-lock.json'),
         runtime: Runtime.NODEJS_20_X,
-        vpc,
+        // vpc,
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(60),
-        securityGroups: [lambdaToRDSProxyGroup],
+        // securityGroups: [lambdaToRDSProxyGroup],
         environment: {
-          DB_HOST: rdsProxy.endpoint,
+          DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com', // rdsProxy.endpoint,
           RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
           DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
           DB_USER: 'postgres',
@@ -150,9 +150,9 @@ export class FlockRecommendationStack extends cdk.Stack {
       }
     );
 
-    secret.grantRead(handler);
+    // secret.grantRead(handler);
 
-    rdsProxy.grantConnect(handler);
+    // rdsProxy.grantConnect(handler);
 
     handler.addEventSource(new SqsEventSource(queue, { batchSize: 1 }));
   }

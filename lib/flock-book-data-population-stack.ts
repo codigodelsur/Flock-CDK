@@ -1,14 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import { Port, SecurityGroup, Vpc } from 'aws-cdk-lib/aws-ec2';
-import { Key } from 'aws-cdk-lib/aws-kms';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
-import {
-  DatabaseInstance,
-  DatabaseInstanceEngine,
-  DatabaseProxy,
-} from 'aws-cdk-lib/aws-rds';
+import { DatabaseProxy } from 'aws-cdk-lib/aws-rds';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { SqsSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
@@ -48,67 +43,75 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
 
     topic.addSubscription(new SqsSubscription(queue));
 
-    const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
+    // const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
 
-    const secret = Secret.fromSecretCompleteArn(
-      this,
-      'rds-credentials-secret',
-      'arn:aws:secretsmanager:us-east-1:431027017019:secret:rds-credentials-secret-dev-FGVNuH'
-    );
+    // const secret = Secret.fromSecretCompleteArn(
+    //   this,
+    //   'rds-credentials-secret',
+    //   workload === 'dev'
+    //     ? 'arn:aws:secretsmanager:us-east-1:431027017019:secret:rds-credentials-secret-dev-FGVNuH'
+    //     : 'arn:aws:secretsmanager:us-east-1:431027017019:secret:rds-credentials-secret-stage-vE757P'
+    // );
 
-    const dbConnectionGroup = new SecurityGroup(
-      this,
-      'Proxy to DB Connection',
-      {
-        vpc,
-      }
-    );
+    // const dbConnectionGroup = new SecurityGroup(
+    //   this,
+    //   'Proxy to DB Connection',
+    //   {
+    //     vpc,
+    //   }
+    // );
 
-    const lambdaToRDSProxyGroup = new SecurityGroup(
-      this,
-      'Lambda to RDS Proxy Connection',
-      {
-        vpc,
-      }
-    );
+    // const lambdaToRDSProxyGroup = new SecurityGroup(
+    //   this,
+    //   'Lambda to RDS Proxy Connection',
+    //   {
+    //     vpc,
+    //   }
+    // );
 
-    dbConnectionGroup.addIngressRule(
-      dbConnectionGroup,
-      Port.tcp(5432),
-      'allow db connection'
-    );
+    // dbConnectionGroup.addIngressRule(
+    //   dbConnectionGroup,
+    //   Port.tcp(5432),
+    //   'allow db connection'
+    // );
 
-    dbConnectionGroup.addIngressRule(
-      lambdaToRDSProxyGroup,
-      Port.tcp(5432),
-      'allow lambda connection'
-    );
+    // dbConnectionGroup.addIngressRule(
+    //   lambdaToRDSProxyGroup,
+    //   Port.tcp(5432),
+    //   'allow lambda connection'
+    // );
 
-    const rdsProxySecurityGroup = SecurityGroup.fromSecurityGroupId(
-      this,
-      'rds-proxy-security-group',
-      'sg-0d271b01a09f02186'
-    );
+    // const rdsProxySecurityGroup = SecurityGroup.fromSecurityGroupId(
+    //   this,
+    //   'rds-proxy-security-group',
+    //   'sg-0d271b01a09f02186'
+    // );
 
-    const rdsProxy = DatabaseProxy.fromDatabaseProxyAttributes(
-      this,
-      'rds-proxy',
-      {
-        dbProxyArn:
-          'arn:aws:rds:us-east-1:431027017019:db-proxy:prx-098e7cbe539feeb4c',
-        dbProxyName:
-          'flockrecommendationdevrdsfecommendationstackdevproxy984ca9dc',
-        endpoint:
-          'flockrecommendationdevrdsfecommendationstackdevproxy984ca9dc.proxy-cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
-        securityGroups: [rdsProxySecurityGroup],
-      }
-    );
+    // const rdsProxy = DatabaseProxy.fromDatabaseProxyAttributes(
+    //   this,
+    //   'rds-proxy',
+    //   {
+    //     dbProxyArn:
+    //       workload === 'dev'
+    //         ? 'arn:aws:rds:us-east-1:431027017019:db-proxy:prx-098e7cbe539feeb4c'
+    //         : 'arn:aws:rds:us-east-1:431027017019:db-proxy:prx-0490b9cb27558804a',
+    //     dbProxyName:
+    //       workload === 'dev'
+    //         ? 'flockrecommendationdevrdsfecommendationstackdevproxy984ca9dc'
+    //         : 'flockrecommendationstackstommendationstackstageproxy35d5e20f',
+    //     endpoint:
+    //       workload === 'dev'
+    //         ? 'flockrecommendationdevrdsfecommendationstackdevproxy984ca9dc.proxy-cvi6m0giyhbg.us-east-1.rds.amazonaws.com'
+    //         : 'flockrecommendationstackstommendationstackstageproxy35d5e20f.proxy-cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
+    //     securityGroups: [rdsProxySecurityGroup],
+    //   }
+    // );
 
-    rdsProxySecurityGroup.addIngressRule(
-      lambdaToRDSProxyGroup,
-      Port.tcp(5432),
-      'allow lambda connection'
-    );
+    // rdsProxySecurityGroup.addIngressRule(
+    //   lambdaToRDSProxyGroup,
+    //   Port.tcp(5432),
+    //   'allow lambda connection'
+    // );
 
     const projectRoot = path.resolve(
       __dirname,
@@ -125,12 +128,12 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
         entry: path.join(projectRoot, 'function.ts'),
         depsLockFilePath: path.join(projectRoot, 'package-lock.json'),
         runtime: Runtime.NODEJS_20_X,
-        vpc,
+        // vpc,
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(60),
-        securityGroups: [lambdaToRDSProxyGroup],
+        // securityGroups: [lambdaToRDSProxyGroup],
         environment: {
-          DB_HOST: rdsProxy.endpoint,
+          DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com', // rdsProxy.endpoint,
           RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
           DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
           DB_USER: 'postgres',
@@ -155,9 +158,9 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
       }
     );
 
-    secret.grantRead(handler);
+    // secret.grantRead(handler);
 
-    rdsProxy.grantConnect(handler, 'postgres');
+    // rdsProxy.grantConnect(handler, 'postgres');
 
     handler.addEventSource(new SqsEventSource(queue, { batchSize: 1 }));
   }
