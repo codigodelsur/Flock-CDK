@@ -1,3 +1,4 @@
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { SQSEvent, SQSHandler } from 'aws-lambda';
 import { readFileSync } from 'fs';
 import { join } from 'path';
@@ -29,26 +30,46 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
       const { body } = item;
 
       const bookId = JSON.parse(body).Message;
-      const book = await getBookById(db, bookId);
+      const dbBook = await getBookById(db, bookId);
 
-      console.log('book', book);
+      console.log('dbBook', dbBook);
 
-      if (!book) {
+      if (!dbBook) {
         continue;
       }
 
-      const bookData = await getOpenLibraryBook(book);
+      const book: Book = await getOpenLibraryBook(dbBook);
 
-      console.log('bookData', bookData);
+      console.log('book with ol data', book);
 
-      if (bookData.author) {
-        const author = await upsertAuthor(db, bookData.author);
+      const { categories, name, cover, description } = await getGoogleData(
+        book
+      );
 
-        console.log('author', author);
+      const subjects = removeDuplicates(
+        removeDuplicates(
+          categories
+            .map((category: string) => getSubjectsByCategory(category))
+            .filter((category: string) => !!category)
+        )
+          .join(',')
+          .split(',')
+      ).join(',');
 
-        await updateBook(db, { ...bookData, author });
+      book.description = description || '';
+      book.name = name;
+      book.subjects = subjects;
+      book.cover = cover;
+
+      console.log('book with google data', book);
+
+      await uploadCover(book);
+
+      if (book.author) {
+        const author = await upsertAuthor(db, book.author);
+        await updateBook(db, { ...book, author });
       } else {
-        await updateBook(db, bookData);
+        await updateBook(db, book);
       }
 
       console.timeLog('handler', 'update book finished');
@@ -63,7 +84,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
 async function getBookById(db: Client, bookId: string): Promise<Book | null> {
   const { rows: books } = await db.query(
-    `SELECT id, olid FROM "Books" b WHERE b."id" = $1`,
+    `SELECT id, olid, name FROM "Books" b WHERE b."id" = $1`,
     [bookId]
   );
 
@@ -81,71 +102,18 @@ async function getOpenLibraryBook(book: Book) {
 
   const work = await workResponse.json();
 
-  const editionsResponse = await fetch(
-    `https://openlibrary.org/works/${book.olid}/editions.json?limit=500`
-  );
-  const editions = await editionsResponse.json();
-
-  const bestEditions = editions.entries.filter(
-    (entry: any) =>
-      entry.description &&
-      entry.languages &&
-      entry.authors &&
-      entry.authors.length > 0 &&
-      entry.subjects &&
-      entry.subjects.length > 0 &&
-      entry.languages[0].key === '/languages/eng'
-  );
-
-  console.log('bestEditions', bestEditions);
-
-  bestEditions.sort(
-    (first: any, second: any) => second.revision - first.revision
-  );
-
-  const edition =
-    bestEditions && bestEditions.length > 0 ? bestEditions[0] : null;
-
-  let authorOlid;
-  let subjects;
-  let description;
-
-  if (edition) {
-    authorOlid = edition.authors[0].key?.replace('/authors/', '');
-
-    subjects = edition.subjects
-      .map((subject: string) => getSubjectByText(subject))
-      .filter((subject: string) => !!subject);
-
-    description =
-      typeof edition.description === 'object'
-        ? edition.description.value || ''
-        : edition.description || '';
-  } else {
-    authorOlid =
-      work.authors &&
-      work.authors.length > 0 &&
-      work.authors[0].author?.key?.replace('/authors/', '');
-
-    subjects =
-      work.subjects && work.subjects.length > 0
-        ? work.subjects
-            .map((subject: string) => getSubjectByText(subject))
-            .filter((subject: string) => !!subject)
-        : [];
-
-    description =
-      typeof work.description === 'object'
-        ? work.description.value || ''
-        : work.description || '';
-  }
+  const authorOlid =
+    work.authors &&
+    work.authors.length > 0 &&
+    work.authors[0].author?.key?.replace('/authors/', '');
 
   return {
     id: book.id,
     olid: book.olid,
     author: await getOpenLibraryAuthor(authorOlid),
-    subjects: subjects.join(','),
-    description,
+    name: book.name,
+    description: '',
+    subjects: '',
   };
 }
 
@@ -163,20 +131,30 @@ async function getOpenLibraryAuthor(olid: string) {
   };
 }
 
-function getSubjectByText(text: string) {
+function getSubjectsByCategory(category: string) {
+  const subjects = [];
+
   for (const subject in SUBJECTS) {
-    if (SUBJECTS[subject].includes(text)) {
-      return subject;
+    for (const chunk of category.split(' / ')) {
+      if (SUBJECTS[subject].includes(chunk)) {
+        subjects.push(subject);
+      }
     }
   }
 
-  return '';
+  return removeDuplicates(subjects).join(',');
 }
 
 async function updateBook(db: Client, bookData: Book) {
   await db.query(
-    `UPDATE "Books" SET description = $2, "authorId" = $3, "updatedAt" = $4 WHERE id = $1`,
-    [bookData.id, bookData.description, bookData.author?.id || null, new Date()]
+    `UPDATE "Books" SET description = $2, subjects = $3, "authorId" = $4, "updatedAt" = $5 WHERE id = $1`,
+    [
+      bookData.id,
+      bookData.description,
+      bookData.subjects,
+      bookData.author?.id || null,
+      new Date(),
+    ]
   );
 }
 
@@ -200,12 +178,98 @@ async function upsertAuthor(db: Client, author: Author) {
   return authors[0];
 }
 
+async function getGoogleData(book: Book) {
+  const params = [
+    `q=intitle:${stringToUrl(book.name!)}+inauthor:${stringToUrl(
+      book.author!.name
+    )}`,
+    'projection=full',
+    'orderBy=newest',
+    'langRestrict=en',
+  ];
+
+  const url = `https://www.googleapis.com/books/v1/volumes?${params.join('&')}`;
+
+  const response = await fetch(url);
+  const result = await response.json();
+
+  if (!result.items || result.items.length === 0) {
+    return { categories: [], cover: null, name: null, description: null };
+  }
+
+  return getVolumeData(
+    result.items[0].id,
+    result.items[0].volumeInfo.description!
+  );
+}
+
+async function getVolumeData(volumeId: string, description: string) {
+  const url = `https://www.googleapis.com/books/v1/volumes/${volumeId}`;
+
+  const response = await fetch(url);
+  const result = await response.json();
+
+  if (!result.volumeInfo) {
+    return {
+      categories: [],
+      name: '',
+      cover: '',
+      description: '',
+    };
+  }
+
+  return {
+    categories: result.volumeInfo.categories || [],
+    name: result.volumeInfo.title,
+    cover: result.volumeInfo.imageLinks?.thumbnail
+      .replaceAll('edge=curl&', '')
+      .replaceAll('edge=curl', ''),
+    description,
+  };
+}
+
+async function uploadCover(book: Book) {
+  const s3Client = new S3Client({});
+
+  if (!book.cover) {
+    return;
+  }
+
+  const coverResponse = await fetch(book.cover!);
+  const file = await coverResponse.arrayBuffer();
+
+  const command = new PutObjectCommand({
+    Body: Buffer.from(file),
+    Bucket: process.env.IMAGES_BUCKET,
+    Key: `covers/${book.id}.jpg`,
+  });
+
+  return s3Client.send(command);
+}
+
+function stringToUrl(string: string) {
+  return string
+    .toLowerCase()
+    .replaceAll(' ', '+')
+    .replaceAll('(', '')
+    .replaceAll(')', '')
+    .replaceAll('#', '')
+    .replaceAll('-', '')
+    .replaceAll("'", '');
+}
+
+function removeDuplicates(array: string[]) {
+  return Array.from(new Set(array));
+}
+
 type Book = {
   id: string;
   olid: string;
+  name?: string;
   author?: Author | null;
   subjects?: string;
   description?: string;
+  cover?: string;
 };
 
 type Author = {

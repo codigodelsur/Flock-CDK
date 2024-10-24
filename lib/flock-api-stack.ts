@@ -6,11 +6,12 @@ import { CfnService } from 'aws-cdk-lib/aws-apprunner';
 import { UserPool, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { Effect, Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
+import { ApiStackProps } from '../bin/flock-cdk';
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
 
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props?: ApiStackProps) {
     super(scope, id, props);
 
     // Cognito (Users)
@@ -149,6 +150,12 @@ export class FlockApiStack extends cdk.Stack {
                 startCommand: 'npm start',
                 port: '3000',
                 runtime: 'NODEJS_18',
+                runtimeEnvironmentSecrets: [
+                  {
+                    name: 'FIREBASE_PRIVATE_KEY',
+                    value: 'arn:aws:ssm:us-east-1:431027017019:parameter/FIREBASE_PRIVATE_KEY_DEV',
+                  },
+                ],
                 runtimeEnvironmentVariables: [
                   {
                     name: 'COGNITO_CLIENT_ID',
@@ -173,7 +180,10 @@ export class FlockApiStack extends cdk.Stack {
                   { name: 'DB_PORT', value: '5432' },
                   { name: 'DB_SSL', value: 'true' },
                   { name: 'DB_USER', value: 'postgres' },
-                  { name: 'IMAGES_BUCKET', value: this.imagesBucket.bucketName },
+                  {
+                    name: 'IMAGES_BUCKET',
+                    value: this.imagesBucket.bucketName,
+                  },
                   {
                     name: 'OPEN_LIBRARY_COVERS_URL',
                     value: 'https://covers.openlibrary.org',
@@ -183,14 +193,55 @@ export class FlockApiStack extends cdk.Stack {
                     value: 'https://openlibrary.org',
                   },
                   {
-                    name: 'UPDATE_PROFILE_TOPIC_ARN', // TODO - Get from topic resource
-                    value:
-                      'arn:aws:sns:us-east-1:431027017019:user-profile-updated-topic-dev',
+                    name: 'UPDATE_PROFILE_TOPIC_ARN',
+                    value: props!.userUpdatedTopic!.topicArn, // 'arn:aws:sns:us-east-1:431027017019:user-profile-updated-topic-dev',
+                  },
+                  {
+                    name: 'CONVERSATION_CREATED_TOPIC_ARN',
+                    value: props!.conversationCreatedTopic!.topicArn,
                   },
                   {
                     name: 'CREATE_BOOK_TOPIC_ARN', // TODO - Get from topic resource
                     value:
                       'arn:aws:sns:us-east-1:431027017019:book-created-topic-dev',
+                  },
+                  {
+                    name: 'FIREBASE_AUTH_CERT_URL',
+                    value: 'https://www.googleapis.com/oauth2/v1/certs',
+                  },
+                  {
+                    name: 'FIREBASE_CLIENT_CERT_URL',
+                    value:
+                      'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-l31uz%40flock-89274.iam.gserviceaccount.com',
+                  },
+                  {
+                    name: 'FIREBASE_CLIENT_EMAIL',
+                    value:
+                      'firebase-adminsdk-l31uz@flock-89274.iam.gserviceaccount.com',
+                  },
+                  {
+                    name: 'FIREBASE_CLIENT_ID',
+                    value: '102778840894606863219',
+                  },
+                  {
+                    name: 'FIREBASE_PRIVATE_KEY_ID',
+                    value: 'aeafb95d5f0ddf29609ac661a0bf746e9b033bf9',
+                  },
+                  {
+                    name: 'FIREBASE_PROJECT_ID',
+                    value: 'flock-89274',
+                  },
+                  {
+                    name: 'FIREBASE_TOKEN_URI',
+                    value: 'https://oauth2.googleapis.com/token',
+                  },
+                  {
+                    name: 'FIREBASE_TYPE',
+                    value: 'service_account',
+                  },
+                  {
+                    name: 'FIREBASE_UNIVERSAL_DOMAIN',
+                    value: 'googleapis.com',
                   },
                 ],
               },

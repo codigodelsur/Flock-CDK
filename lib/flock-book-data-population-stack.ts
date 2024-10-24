@@ -10,15 +10,29 @@ import { SqsSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import path = require('path');
+import { BookDataPopulationStackProps } from '../bin/flock-cdk';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
 
 export class FlockBookDataPopulationStack extends cdk.Stack {
   constructor(
     scope: Construct,
     id: string,
     workload: string,
-    props?: cdk.StackProps
+    props: BookDataPopulationStackProps
   ) {
     super(scope, id, props);
+
+    let imagesBucket;
+
+    if (!props.imagesBucket) {
+      imagesBucket = Bucket.fromBucketName(
+        this,
+        'flock-images-stage',
+        'flock-images-stage'
+      );
+    } else {
+      imagesBucket = props.imagesBucket;
+    }
 
     // SNS Topic
     const topic = new Topic(this, 'book-created-topic', {
@@ -138,6 +152,7 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
           DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
           DB_USER: 'postgres',
           DB_PASS: 'Sa6Mh4y9H9MQKxknPeggmdY',
+          IMAGES_BUCKET: imagesBucket.bucketName,
         },
         bundling: {
           commandHooks: {
@@ -162,6 +177,7 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
 
     // rdsProxy.grantConnect(handler, 'postgres');
 
+    imagesBucket.grantWrite(handler);
     handler.addEventSource(new SqsEventSource(queue, { batchSize: 1 }));
   }
 }
