@@ -155,7 +155,7 @@ async function getOpenLibraryData(book: NYTimesBook) {
 
 async function getGoogleData(book: NYTimesBook) {
   const params = [
-    `q=intitle:${stringToUrl(book.title)}+inauthor:${book.author}`,
+    `q=intitle:${stringToUrl(book.title)}+inauthor:${stringToUrl(book.author)}`,
     'projection=full',
     'langRestrict=en',
   ];

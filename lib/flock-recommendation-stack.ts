@@ -10,8 +10,12 @@ import { SqsSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import path = require('path');
+import 'dotenv/config';
 
 export class FlockRecommendationStack extends cdk.Stack {
+  public readonly userUpdatedTopic: Topic;
+  public readonly conversationCreatedTopic: Topic;
+
   constructor(
     scope: Construct,
     id: string,
@@ -21,7 +25,7 @@ export class FlockRecommendationStack extends cdk.Stack {
     super(scope, id, props);
 
     // SNS Topic
-    const topic = new Topic(this, 'user-profile-updated-topic', {
+    this.userUpdatedTopic = new Topic(this, 'user-profile-updated-topic', {
       displayName: 'Updated User Profile',
       topicName: `user-profile-updated-topic-${workload}`,
       // loggingConfigs: [
@@ -34,103 +38,149 @@ export class FlockRecommendationStack extends cdk.Stack {
       // ],
     });
 
+    this.conversationCreatedTopic = new Topic(
+      this,
+      'conversation-created-topic',
+      {
+        displayName: 'Conversation Created',
+        topicName: `conversation-created-topic-${workload}`,
+        // loggingConfigs: [
+        //   {
+        //     protocol: LoggingProtocol.SQS,
+        //     failureFeedbackRole: role,
+        //     successFeedbackRole: role,
+        //     successFeedbackSampleRate: 50,
+        //   },
+        // ],
+      }
+    );
+
     // SQS Queue
-    const queue = new Queue(this, 'user-profile-updated-queue', {
+    const userUpdatedQueue = new Queue(this, 'user-profile-updated-queue', {
       receiveMessageWaitTime: cdk.Duration.seconds(2),
       visibilityTimeout: cdk.Duration.seconds(120),
       // add dead-letter queue
     });
 
-    topic.addSubscription(new SqsSubscription(queue));
+    this.userUpdatedTopic.addSubscription(
+      new SqsSubscription(userUpdatedQueue)
+    );
 
-    const projectRoot = path.resolve(
+    // SQS Queue
+    const conversationCreatedQueue = new Queue(
+      this,
+      'conversation-created-queue',
+      {
+        receiveMessageWaitTime: cdk.Duration.seconds(2),
+        visibilityTimeout: cdk.Duration.seconds(120),
+        // add dead-letter queue
+      }
+    );
+
+    this.conversationCreatedTopic.addSubscription(
+      new SqsSubscription(conversationCreatedQueue)
+    );
+
+    const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
+
+    const securityGroup = SecurityGroup.fromSecurityGroupId(
+      this,
+      'security-group',
+      'sg-08800ce1e272b7f43'
+    );
+
+    const rdsInstance = DatabaseInstance.fromDatabaseInstanceAttributes(
+      this,
+      'rds',
+      {
+        instanceEndpointAddress:
+          'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
+        instanceIdentifier: 'flock-db-stage',
+        port: 5432,
+        securityGroups: [securityGroup],
+        engine: DatabaseInstanceEngine.POSTGRES,
+      }
+    );
+
+    const secret =
+      workload === 'stage' &&
+      new Secret(this, 'rds-credentials-secret', {
+        secretName: `rds-credentials-secret-${workload}`,
+        secretObjectValue: {
+          username: new cdk.SecretValue(process.env.DB_USER),
+          password: new cdk.SecretValue(process.env.DB_PASS),
+        },
+      });
+
+    const dbConnectionGroup =
+      workload === 'stage' &&
+      new SecurityGroup(this, 'Proxy to DB Connection', {
+        vpc,
+      });
+
+    const lambdaToRDSProxyGroup =
+      workload === 'stage' &&
+      new SecurityGroup(this, 'Lambda to RDS Proxy Connection', {
+        vpc,
+      });
+
+    if (workload === 'stage' && dbConnectionGroup && lambdaToRDSProxyGroup) {
+      dbConnectionGroup.addIngressRule(
+        dbConnectionGroup,
+        Port.tcp(5432),
+        'allow db connection'
+      );
+
+      dbConnectionGroup.addIngressRule(
+        lambdaToRDSProxyGroup,
+        Port.tcp(5432),
+        'allow lambda connection'
+      );
+    }
+
+    const rdsProxy =
+      workload === 'stage' &&
+      secret &&
+      dbConnectionGroup &&
+      rdsInstance.addProxy(`${id}-proxy`, {
+        vpc,
+        secrets: [secret],
+        securityGroups: [dbConnectionGroup],
+        requireTLS: true,
+      });
+
+    const userRecommendationProjectRoot = path.resolve(
       __dirname,
       '../lambdas/user-recommendation-handler'
     );
 
-    // const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
-
-    // const securityGroup = SecurityGroup.fromSecurityGroupId(
-    //   this,
-    //   'security-group',
-    //   'sg-08800ce1e272b7f43'
-    // );
-
-    // const rdsInstance = DatabaseInstance.fromDatabaseInstanceAttributes(
-    //   this,
-    //   'rds',
-    //   {
-    //     instanceEndpointAddress:
-    //       'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
-    //     instanceIdentifier: 'flock-db-stage',
-    //     port: 5432,
-    //     securityGroups: [securityGroup],
-    //     engine: DatabaseInstanceEngine.POSTGRES,
-    //   }
-    // );
-
-    // const secret = new Secret(this, 'rds-credentials-secret', {
-    //   secretName: `rds-credentials-secret-${workload}`,
-    //   secretObjectValue: {
-    //     username: new cdk.SecretValue('postgres'),
-    //     password: new cdk.SecretValue('Sa6Mh4y9H9MQKxknPeggmdY'),
-    //   },
-    // });
-
-    // const dbConnectionGroup = new SecurityGroup(
-    //   this,
-    //   'Proxy to DB Connection',
-    //   {
-    //     vpc,
-    //   }
-    // );
-
-    // const lambdaToRDSProxyGroup = new SecurityGroup(
-    //   this,
-    //   'Lambda to RDS Proxy Connection',
-    //   {
-    //     vpc,
-    //   }
-    // );
-
-    // dbConnectionGroup.addIngressRule(
-    //   dbConnectionGroup,
-    //   Port.tcp(5432),
-    //   'allow db connection'
-    // );
-
-    // dbConnectionGroup.addIngressRule(
-    //   lambdaToRDSProxyGroup,
-    //   Port.tcp(5432),
-    //   'allow lambda connection'
-    // );
-
-    // const rdsProxy = rdsInstance.addProxy(`${id}-proxy`, {
-    //   vpc,
-    //   secrets: [secret],
-    //   securityGroups: [dbConnectionGroup],
-    //   requireTLS: true,
-    // });
-
-    // Lambda
-    const handler = new NodejsFunction(
+    const userRecommendationHandler = new NodejsFunction(
       this,
       `user-recommendation-handler-${workload}`,
       {
-        projectRoot,
-        entry: path.join(projectRoot, 'function.ts'),
-        depsLockFilePath: path.join(projectRoot, 'package-lock.json'),
+        projectRoot: userRecommendationProjectRoot,
+        entry: path.join(userRecommendationProjectRoot, 'function.ts'),
+        depsLockFilePath: path.join(
+          userRecommendationProjectRoot,
+          'package-lock.json'
+        ),
         runtime: Runtime.NODEJS_20_X,
-        // vpc,
+        vpc: workload === 'dev' ? undefined : vpc,
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(60),
-        // securityGroups: [lambdaToRDSProxyGroup],
+        securityGroups:
+          workload === 'dev' || !lambdaToRDSProxyGroup
+            ? undefined
+            : [lambdaToRDSProxyGroup],
         environment: {
-          DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com', // rdsProxy.endpoint,
+          DB_HOST:
+            workload === 'dev' || !rdsProxy
+              ? 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com'
+              : rdsProxy.endpoint,
           RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
           DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-          DB_USER: 'postgres',
-          DB_PASS: 'Sa6Mh4y9H9MQKxknPeggmdY',
+          DB_USER: process.env.DB_USER,
+          DB_PASS: process.env.DB_PASS,
         },
         bundling: {
           commandHooks: {
@@ -150,10 +200,77 @@ export class FlockRecommendationStack extends cdk.Stack {
       }
     );
 
-    // secret.grantRead(handler);
+    if (workload === 'stage' && secret && rdsProxy) {
+      secret.grantRead(userRecommendationHandler);
+      rdsProxy.grantConnect(userRecommendationHandler);
+    }
 
-    // rdsProxy.grantConnect(handler);
+    userRecommendationHandler.addEventSource(
+      new SqsEventSource(userUpdatedQueue, { batchSize: 1 })
+    );
 
-    handler.addEventSource(new SqsEventSource(queue, { batchSize: 1 }));
+    const bookRecommendationProjectRoot = path.resolve(
+      __dirname,
+      '../lambdas/book-recommendation-handler'
+    );
+
+    const bookRecommendationHandler = new NodejsFunction(
+      this,
+      `book-recommendation-handler-${workload}`,
+      {
+        functionName: `book-recommendation-handler-${workload}`,
+        projectRoot: bookRecommendationProjectRoot,
+        entry: path.join(bookRecommendationProjectRoot, 'function.ts'),
+        depsLockFilePath: path.join(
+          bookRecommendationProjectRoot,
+          'package-lock.json'
+        ),
+        runtime: Runtime.NODEJS_20_X,
+        vpc: workload === 'dev' ? undefined : vpc,
+        allowPublicSubnet: true,
+        timeout: cdk.Duration.seconds(60),
+        securityGroups:
+          workload === 'dev' || !lambdaToRDSProxyGroup
+            ? undefined
+            : [lambdaToRDSProxyGroup],
+        environment: {
+          DB_HOST:
+            workload === 'dev' || !rdsProxy
+              ? 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com'
+              : rdsProxy.endpoint,
+          RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
+          DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
+          DB_USER: process.env.DB_USER,
+          DB_PASS: process.env.DB_PASS,
+          OPEN_AI_ORGANIZATION: process.env.OPEN_AI_ORGANIZATION,
+          OPEN_AI_PROJECT: process.env.OPEN_AI_PROJECT,
+          OPEN_AI_API_KEY: process.env.OPEN_AI_API_KEY,
+        },
+        bundling: {
+          commandHooks: {
+            afterBundling: (inputDir: string, outputDir: string): string[] => [
+              `cp ${inputDir}/bundle.pem ${outputDir}`,
+            ],
+            beforeBundling: (
+              _inputDir: string,
+              _outputDir: string
+            ): string[] => [],
+            beforeInstall: (
+              _inputDir: string,
+              _outputDir: string
+            ): string[] => [],
+          },
+        },
+      }
+    );
+
+    if (workload === 'stage' && secret && rdsProxy) {
+      secret.grantRead(bookRecommendationHandler);
+      rdsProxy.grantConnect(bookRecommendationHandler);
+    }
+
+    bookRecommendationHandler.addEventSource(
+      new SqsEventSource(conversationCreatedQueue, { batchSize: 1 })
+    );
   }
 }

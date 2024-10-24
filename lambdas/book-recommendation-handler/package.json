@@ -1,0 +1,23 @@
+{
+  "name": "user-recommendation-handler",
+  "version": "1.0.0",
+  "main": "function.ts",
+  "scripts": {
+    "build": "esbuild function.ts",
+    "start": "tsx watch --env-file=.env run.ts"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/aws-lambda": "^8.10.145",
+    "@types/node": "^22.5.1",
+    "openai": "^4.67.3",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.8",
+    "esbuild": "^0.23.1",
+    "tsx": "^4.19.0"
+  }
+}
