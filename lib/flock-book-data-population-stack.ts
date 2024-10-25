@@ -12,6 +12,7 @@ import { Construct } from 'constructs';
 import path = require('path');
 import { BookDataPopulationStackProps } from '../bin/flock-cdk';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
+import 'dotenv/config';
 
 export class FlockBookDataPopulationStack extends cdk.Stack {
   constructor(
@@ -150,8 +151,8 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
           DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com', // rdsProxy.endpoint,
           RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
           DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-          DB_USER: 'postgres',
-          DB_PASS: 'Sa6Mh4y9H9MQKxknPeggmdY',
+          DB_USER: process.env.DB_USER,
+          DB_PASS: process.env.DB_PASS,
           IMAGES_BUCKET: imagesBucket.bucketName,
         },
         bundling: {

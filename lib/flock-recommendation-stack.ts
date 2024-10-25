@@ -4,6 +4,7 @@ import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { DatabaseInstance, DatabaseInstanceEngine } from 'aws-cdk-lib/aws-rds';
+import { Bucket } from 'aws-cdk-lib/aws-s3';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { SqsSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
@@ -214,6 +215,14 @@ export class FlockRecommendationStack extends cdk.Stack {
       '../lambdas/book-recommendation-handler'
     );
 
+    const imagesBucket = Bucket.fromBucketName(
+      this,
+      `flock-images-${workload}`,
+      workload === 'dev'
+        ? 'flock-api-dev-flockimages95de63b1-6uuwx9hyb7gv'
+        : 'flock-images-stage'
+    );
+
     const bookRecommendationHandler = new NodejsFunction(
       this,
       `book-recommendation-handler-${workload}`,
@@ -245,6 +254,7 @@ export class FlockRecommendationStack extends cdk.Stack {
           OPEN_AI_ORGANIZATION: process.env.OPEN_AI_ORGANIZATION,
           OPEN_AI_PROJECT: process.env.OPEN_AI_PROJECT,
           OPEN_AI_API_KEY: process.env.OPEN_AI_API_KEY,
+          IMAGES_BUCKET: imagesBucket.bucketName,
         },
         bundling: {
           commandHooks: {
@@ -263,6 +273,8 @@ export class FlockRecommendationStack extends cdk.Stack {
         },
       }
     );
+
+    imagesBucket.grantWrite(bookRecommendationHandler);
 
     if (workload === 'stage' && secret && rdsProxy) {
       secret.grantRead(bookRecommendationHandler);

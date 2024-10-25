@@ -7,6 +7,7 @@ import { UserPool, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
 import { Effect, Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { ApiStackProps } from '../bin/flock-cdk';
+import 'dotenv/config';
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
@@ -176,10 +177,10 @@ export class FlockApiStack extends cdk.Stack {
                   },
                   { name: 'DB_LOGGING', value: 'false' },
                   { name: 'DB_NAME', value: 'flock_db_dev' }, // TODO - Don't harcode it
-                  { name: 'DB_PASS', value: 'Sa6Mh4y9H9MQKxknPeggmdY' },
+                  { name: 'DB_PASS', value: process.env.DB_PASS },
                   { name: 'DB_PORT', value: '5432' },
                   { name: 'DB_SSL', value: 'true' },
-                  { name: 'DB_USER', value: 'postgres' },
+                  { name: 'DB_USER', value: process.env.DB_PASS },
                   {
                     name: 'IMAGES_BUCKET',
                     value: this.imagesBucket.bucketName,
