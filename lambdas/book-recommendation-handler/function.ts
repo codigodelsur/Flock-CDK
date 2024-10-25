@@ -2,6 +2,7 @@ import { SQSEvent, SQSHandler } from 'aws-lambda';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
@@ -44,6 +45,11 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
       console.log('users', users);
 
+      // TODO - Add support for multi-users
+      if (users.length < 2) {
+        continue;
+      }
+
       const matchedBooks = users[0].books.filter((candidateBook: Book) =>
         users[1].books.find(
           (userBook: Book) => userBook.id === candidateBook.id
@@ -63,12 +69,10 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
       for (const recommendation of recommendations) {
         console.log('recommendation', recommendation);
 
-        const googleData = await getGoogleData(
-          recommendation.title,
-          recommendation.author
-        );
-
-        const olData = await getOpenLibraryData(recommendation);
+        const [googleData, olData] = await Promise.all([
+          getGoogleData(recommendation.title, recommendation.author),
+          getOpenLibraryData(recommendation),
+        ]);
 
         console.log('Open Library Data', olData);
 
@@ -81,6 +85,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           description: googleData.description || '',
           author: recommendation.author,
           olid: olData.olid,
+          cover: googleData.cover,
         };
 
         const authorId = await insertAuthor(
@@ -89,9 +94,16 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           olData.author.olid
         );
 
-        await insertBook(db, book, authorId);
+        const recommendationBookId = await insertBook(db, book, authorId);
 
-        // TODO - Upload Cover to S3
+        await Promise.all([
+          uploadCover({ ...book, id: recommendationBookId }),
+          insertBookRecommendation(
+            db,
+            data.conversationId,
+            recommendationBookId
+          ),
+        ]);
       }
     }
   } catch (e) {
@@ -181,13 +193,16 @@ async function insertBook(db: Client, book: Book, authorId: string) {
   );
 
   if (foundBook) {
-    return foundBook;
+    return foundBook.id;
   }
 
-  const response = await db.query(
+  const {
+    rows: [{ id }],
+  } = await db.query(
     `
       INSERT INTO "Books" ("id", "name", "description", "authorId", "olid", "source", "priority", "createdAt", "updatedAt")
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING id
     `,
     [
       crypto.randomUUID(),
@@ -200,6 +215,22 @@ async function insertBook(db: Client, book: Book, authorId: string) {
       new Date(),
       new Date(),
     ]
+  );
+
+  return id;
+}
+
+async function insertBookRecommendation(
+  db: Client,
+  conversationId: string,
+  bookId: string
+) {
+  const response = await db.query(
+    `
+      INSERT INTO "BookRecommendations" ("id", "conversationId", "bookId", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5)
+    `,
+    [crypto.randomUUID(), conversationId, bookId, new Date(), new Date()]
   );
 
   return response;
@@ -327,9 +358,30 @@ async function getVolumeData(volumeId: string, description: string) {
   return {
     categories: result.volumeInfo.categories || [],
     title: result.volumeInfo.title,
-    cover: result.volumeInfo.imageLinks?.thumbnail,
+    cover: result.volumeInfo.imageLinks?.thumbnail
+      .replaceAll('edge=curl&', '')
+      .replaceAll('edge=curl', ''),
     description,
   };
+}
+
+async function uploadCover(book: Book) {
+  const s3Client = new S3Client({});
+
+  if (!book.cover) {
+    return;
+  }
+
+  const coverResponse = await fetch(book.cover!);
+  const file = await coverResponse.arrayBuffer();
+
+  const command = new PutObjectCommand({
+    Body: Buffer.from(file),
+    Bucket: process.env.IMAGES_BUCKET,
+    Key: `covers/${book.id}.jpg`,
+  });
+
+  return s3Client.send(command);
 }
 
 function stringToUrl(string: string) {
@@ -345,6 +397,7 @@ function stringToUrl(string: string) {
 
 type Book = {
   id?: string;
+  cover?: string;
   olid?: string;
   name: string;
   description?: string;
