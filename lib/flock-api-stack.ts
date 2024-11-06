@@ -244,6 +244,10 @@ export class FlockApiStack extends cdk.Stack {
                     name: 'FIREBASE_UNIVERSAL_DOMAIN',
                     value: 'googleapis.com',
                   },
+                  {
+                    name: 'REGISTRATION_TOKEN_DURATION_IN_MONTHS',
+                    value: '6',
+                  },
                 ],
               },
             },
