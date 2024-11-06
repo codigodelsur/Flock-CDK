@@ -68,6 +68,12 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
     //     : 'arn:aws:secretsmanager:us-east-1:431027017019:secret:rds-credentials-secret-stage-vE757P'
     // );
 
+    const isbnDBKeySecret = Secret.fromSecretCompleteArn(
+      this,
+      'isbndb-key',
+      'arn:aws:secretsmanager:us-east-1:431027017019:secret:isbndb-key-PeG1jN'
+    );
+
     // const dbConnectionGroup = new SecurityGroup(
     //   this,
     //   'Proxy to DB Connection',
@@ -154,6 +160,8 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
           DB_USER: process.env.DB_USER,
           DB_PASS: process.env.DB_PASS,
           IMAGES_BUCKET: imagesBucket.bucketName,
+          ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
+          ISBNDB_API_URL: 'https://api2.isbndb.com',
         },
         bundling: {
           commandHooks: {

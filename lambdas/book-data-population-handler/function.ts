@@ -46,30 +46,11 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           continue;
         }
 
-        const book: Book = await getOpenLibraryBook(dbBook);
+        const book: Book = await getISBNDBBook(dbBook);
+        console.log('book with ISBNdb data', book);
 
-        console.log('book with ol data', book);
-
-        const { categories, name, cover, description } = await getGoogleData(
-          book
-        );
-
-        const subjects = removeDuplicates(
-          removeDuplicates(
-            categories
-              .map((category: string) => getSubjectsByCategory(category))
-              .filter((category: string) => !!category)
-          )
-            .join(',')
-            .split(',')
-        ).join(',');
-
-        book.description = description || '';
-        book.name = name;
-        book.subjects = subjects;
-        book.cover = cover;
-
-        console.log('book with google data', book);
+        book.author = await getOpenLibraryAuthorByBook(dbBook);
+        console.log('book with OL data', book);
 
         await uploadCover(book);
 
@@ -104,10 +85,8 @@ async function getBookById(db: Client, bookId: string): Promise<Book | null> {
   return books[0];
 }
 
-async function getOpenLibraryBook(book: Book) {
-  const olid = book.olid
-    ? book.olid
-    : await getOpenLibraryWorkIdByISBN(book.isbn!);
+async function getOpenLibraryAuthorByBook(book: Book) {
+  const olid = await getOpenLibraryWorkIdByISBN(book.isbn!);
 
   const workResponse = await fetch(
     `https://openlibrary.org/works/${olid}.json`
@@ -122,14 +101,7 @@ async function getOpenLibraryBook(book: Book) {
     work.authors.length > 0 &&
     work.authors[0].author?.key?.replace('/authors/', '');
 
-  return {
-    id: book.id,
-    olid,
-    author: await getOpenLibraryAuthor(authorOlid),
-    name: book.name,
-    description: '',
-    subjects: '',
-  };
+  return getOpenLibraryAuthor(authorOlid);
 }
 
 async function getOpenLibraryWorkIdByISBN(isbn: string) {
@@ -297,9 +269,39 @@ function isUUID(uuid: string) {
   return true;
 }
 
+async function getISBNDBBook(book: Book) {
+  if (!book.isbn) {
+    return book;
+  }
+
+  const response = await fetch(
+    `${process.env.ISBNDB_API_URL}/book/${book.isbn}`,
+    { headers: { Authorization: process.env.ISBNDB_API_KEY } }
+  );
+
+  const { book: apiBook } = await response.json();
+
+  const subjects = removeDuplicates(
+    removeDuplicates(
+      apiBook.subjects
+        .map((category: string) => getSubjectsByCategory(category))
+        .filter((category: string) => !!category)
+    )
+      .join(',')
+      .split(',')
+  ).join(',');
+
+  return {
+    ...book,
+    cover: apiBook.image,
+    description: apiBook.synopsis,
+    subjects,
+  };
+}
+
 type Book = {
   id: string;
-  olid: string;
+  olid?: string;
   isbn?: string;
   name?: string;
   author?: Author | null;
@@ -310,6 +312,6 @@ type Book = {
 
 type Author = {
   id?: string;
-  olid: string;
+  olid?: string;
   name: string;
 };
