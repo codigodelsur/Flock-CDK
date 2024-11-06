@@ -15,16 +15,6 @@ const REGION = 'us-east-1';
 const ACCOUNT = '431027017019';
 const env = { region: REGION, account: ACCOUNT };
 
-const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
-  app,
-  'FlockBookDataPopulationStack-Stage',
-  'stage',
-  {
-    stackName: 'flock-book-data-population-stage',
-    env,
-  }
-);
-
 new FlockRecommendationStack(app, 'FlockRecommendationStack-Stage', 'stage', {
   env,
 });
@@ -35,6 +25,16 @@ const recommendationStackDev = new FlockRecommendationStack(
   'dev',
   {
     stackName: 'flock-recommendation-dev',
+    env,
+  }
+);
+
+const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
+  app,
+  'FlockBookDataPopulationStack-Stage',
+  'stage',
+  {
+    stackName: 'flock-book-data-population-stage',
     env,
   }
 );

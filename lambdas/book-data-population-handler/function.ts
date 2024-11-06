@@ -26,50 +26,59 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
   console.timeLog('handler', 'db connected');
 
   try {
-    for (const item of event.Records) {
-      const { body } = item;
+    for (const record of event.Records) {
+      const { body } = record;
 
-      const bookId = JSON.parse(body).Message;
-      const dbBook = await getBookById(db, bookId);
+      const message = JSON.parse(body).Message;
 
-      console.log('dbBook', dbBook);
+      const item = isUUID(message) ? message : JSON.parse(message);
 
-      if (!dbBook) {
-        continue;
-      }
+      const bookIds = Array.isArray(item) ? item : [item];
 
-      const book: Book = await getOpenLibraryBook(dbBook);
+      console.log('bookIds', bookIds);
 
-      console.log('book with ol data', book);
+      for (const bookId of bookIds) {
+        const dbBook = await getBookById(db, bookId);
 
-      const { categories, name, cover, description } = await getGoogleData(
-        book
-      );
+        console.log('dbBook', dbBook);
 
-      const subjects = removeDuplicates(
-        removeDuplicates(
-          categories
-            .map((category: string) => getSubjectsByCategory(category))
-            .filter((category: string) => !!category)
-        )
-          .join(',')
-          .split(',')
-      ).join(',');
+        if (!dbBook) {
+          continue;
+        }
 
-      book.description = description || '';
-      book.name = name;
-      book.subjects = subjects;
-      book.cover = cover;
+        const book: Book = await getOpenLibraryBook(dbBook);
 
-      console.log('book with google data', book);
+        console.log('book with ol data', book);
 
-      await uploadCover(book);
+        const { categories, name, cover, description } = await getGoogleData(
+          book
+        );
 
-      if (book.author) {
-        const author = await upsertAuthor(db, book.author);
-        await updateBook(db, { ...book, author });
-      } else {
-        await updateBook(db, book);
+        const subjects = removeDuplicates(
+          removeDuplicates(
+            categories
+              .map((category: string) => getSubjectsByCategory(category))
+              .filter((category: string) => !!category)
+          )
+            .join(',')
+            .split(',')
+        ).join(',');
+
+        book.description = description || '';
+        book.name = name;
+        book.subjects = subjects;
+        book.cover = cover;
+
+        console.log('book with google data', book);
+
+        await uploadCover(book);
+
+        if (book.author) {
+          const author = await upsertAuthor(db, book.author);
+          await updateBook(db, { ...book, author });
+        } else {
+          await updateBook(db, book);
+        }
       }
 
       console.timeLog('handler', 'update book finished');
@@ -84,7 +93,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
 async function getBookById(db: Client, bookId: string): Promise<Book | null> {
   const { rows: books } = await db.query(
-    `SELECT id, olid, name FROM "Books" b WHERE b."id" = $1`,
+    `SELECT id, olid, isbn, name FROM "Books" b WHERE b."id" = $1`,
     [bookId]
   );
 
@@ -96,25 +105,39 @@ async function getBookById(db: Client, bookId: string): Promise<Book | null> {
 }
 
 async function getOpenLibraryBook(book: Book) {
+  const olid = book.olid
+    ? book.olid
+    : await getOpenLibraryWorkIdByISBN(book.isbn!);
+
   const workResponse = await fetch(
-    `https://openlibrary.org/works/${book.olid}.json`
+    `https://openlibrary.org/works/${olid}.json`
   );
 
   const work = await workResponse.json();
 
-  const authorOlid =
+  let authorOlid;
+
+  authorOlid =
     work.authors &&
     work.authors.length > 0 &&
     work.authors[0].author?.key?.replace('/authors/', '');
 
   return {
     id: book.id,
-    olid: book.olid,
+    olid,
     author: await getOpenLibraryAuthor(authorOlid),
     name: book.name,
     description: '',
     subjects: '',
   };
+}
+
+async function getOpenLibraryWorkIdByISBN(isbn: string) {
+  const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+
+  const work = await workResponse.json();
+
+  return work.works[0].key.replaceAll('/works/', '');
 }
 
 async function getOpenLibraryAuthor(olid: string) {
@@ -262,9 +285,22 @@ function removeDuplicates(array: string[]) {
   return Array.from(new Set(array));
 }
 
+function isUUID(uuid: string) {
+  const result = uuid.match(
+    '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+  );
+
+  if (result === null) {
+    return false;
+  }
+
+  return true;
+}
+
 type Book = {
   id: string;
   olid: string;
+  isbn?: string;
   name?: string;
   author?: Author | null;
   subjects?: string;
