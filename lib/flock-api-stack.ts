@@ -8,6 +8,7 @@ import { Effect, Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { ApiStackProps } from '../bin/flock-cdk';
 import 'dotenv/config';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
@@ -132,6 +133,12 @@ export class FlockApiStack extends cdk.Stack {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
     });
 
+    const isbnDBKeySecret = Secret.fromSecretNameV2(
+      this,
+      'isbndb-key',
+      'isbndb-key'
+    );
+
     const appRunnerService = new CfnService(
       this,
       `${this.stackName}-apprunner-service`,
@@ -154,7 +161,8 @@ export class FlockApiStack extends cdk.Stack {
                 runtimeEnvironmentSecrets: [
                   {
                     name: 'FIREBASE_PRIVATE_KEY',
-                    value: 'arn:aws:ssm:us-east-1:431027017019:parameter/FIREBASE_PRIVATE_KEY_DEV',
+                    value:
+                      'arn:aws:ssm:us-east-1:431027017019:parameter/FIREBASE_PRIVATE_KEY_DEV',
                   },
                 ],
                 runtimeEnvironmentVariables: [
@@ -247,6 +255,11 @@ export class FlockApiStack extends cdk.Stack {
                   {
                     name: 'REGISTRATION_TOKEN_DURATION_IN_MONTHS',
                     value: '6',
+                  },
+                  { name: 'ISBNDB_URL', value: 'https://api2.isbndb.com' },
+                  {
+                    name: 'ISBNDB_API_KEY',
+                    value: isbnDBKeySecret.secretValue.unsafeUnwrap(),
                   },
                 ],
               },

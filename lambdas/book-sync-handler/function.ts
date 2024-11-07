@@ -32,11 +32,20 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
     nyTimesBooks.map(async (newBook: NYTimesBook) => {
       const book: Book = await getISBNDBBook(newBook);
 
-      if (book.title === 'Untitled') {
+      if (book.title === 'Untitled' || !book.cover) {
         return null;
       }
 
-      book.author = await getOpenLibraryAuthorByBook(newBook);
+      try {
+        book.author = await getOpenLibraryAuthorByBook(newBook);
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+
+      if (!book.author) {
+        return null;
+      }
 
       const dbBook = await getBookByISBN(db, book.isbn!);
 
@@ -86,6 +95,10 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
   );
 
   const { book: apiBook } = await response.json();
+
+  if (!apiBook) {
+    return { ...book, author: null };
+  }
 
   const subjects = removeDuplicates(
     removeDuplicates(
@@ -141,6 +154,10 @@ async function getOpenLibraryAuthorIdByISBN(isbn: string) {
   const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
 
   const work = await workResponse.json();
+
+  if (!work || !work.authors) {
+    return;
+  }
 
   return work.authors[0].key.replaceAll('/authors/', '');
 }
