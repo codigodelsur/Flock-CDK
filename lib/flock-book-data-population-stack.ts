@@ -160,8 +160,8 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
           DB_USER: process.env.DB_USER,
           DB_PASS: process.env.DB_PASS,
           IMAGES_BUCKET: imagesBucket.bucketName,
-          ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
           ISBNDB_API_URL: 'https://api2.isbndb.com',
+          ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
         },
         bundling: {
           commandHooks: {

@@ -29,37 +29,24 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
   console.log('nyTimesBooks', nyTimesBooks);
 
   const books = await Promise.all(
-    nyTimesBooks.map(async (book: NYTimesBook) => {
-      const olResponse = await getOpenLibraryData(book);
+    nyTimesBooks.map(async (newBook: NYTimesBook) => {
+      const book: Book = await getISBNDBBook(newBook);
 
-      if (!olResponse) {
+      if (book.title === 'Untitled') {
         return null;
       }
 
-      const { olid, author } = olResponse;
+      book.author = await getOpenLibraryAuthorByBook(newBook);
 
-      const dbBook = await getBookByOlid(db, olid);
+      const dbBook = await getBookByISBN(db, book.isbn!);
 
       if (dbBook) {
         return null;
       }
 
-      const { categories, title, description } = await getGoogleData(book);
-
-      const subjects = removeDuplicates(
-        categories
-          .map((category: string) => getSubjectByText(category))
-          .filter((category: string) => !!category)
-      ).join(',');
-
       return {
         ...book,
-        olid,
-        title: title ? title : olResponse.title,
-        author: { ...author, subjects },
-        categories,
-        subjects,
-        description: description ? description : book.description,
+        author: { ...book.author, subjects: book.subjects },
       };
     })
   );
@@ -68,7 +55,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
 
   try {
     for (const book of books) {
-      if (!book) {
+      if (!book || !book.author) {
         continue;
       }
 
@@ -88,6 +75,76 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
   }
 };
 
+async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
+  if (!book.primary_isbn13) {
+    return { ...book, author: null };
+  }
+
+  const response = await fetch(
+    `${process.env.ISBNDB_API_URL}/book/${book.primary_isbn13}`,
+    { headers: { Authorization: process.env.ISBNDB_API_KEY } }
+  );
+
+  const { book: apiBook } = await response.json();
+
+  const subjects = removeDuplicates(
+    removeDuplicates(
+      apiBook.subjects
+        .map((category: string) => getSubjectsByCategory(category))
+        .filter((category: string) => !!category)
+    )
+      .join(',')
+      .split(',')
+  ).join(',');
+
+  return {
+    ...book,
+    isbn: book.primary_isbn13,
+    cover: apiBook.image,
+    title: apiBook.title,
+    description: apiBook.synopsis,
+    subjects,
+    author: null,
+  };
+}
+
+function getSubjectsByCategory(category: string) {
+  const subjects = [];
+
+  for (const subject in SUBJECTS) {
+    for (const chunk of category.split(' / ')) {
+      if (SUBJECTS[subject].includes(chunk)) {
+        subjects.push(subject);
+      }
+    }
+  }
+
+  return removeDuplicates(subjects).join(',');
+}
+
+async function getOpenLibraryAuthorByBook(
+  book: NYTimesBook
+): Promise<Author | null> {
+  const authorOlid = await getOpenLibraryAuthorIdByISBN(book.primary_isbn13);
+
+  if (!authorOlid) {
+    return null;
+  }
+
+  return {
+    olid: authorOlid,
+    name: book.author,
+  };
+}
+
+async function getOpenLibraryAuthorIdByISBN(isbn: string) {
+  const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+
+  const work = await workResponse.json();
+
+  return work.authors[0].key.replaceAll('/authors/', '');
+}
+
 async function uploadCover(book: Book) {
   const s3Client = new S3Client({});
 
@@ -103,7 +160,7 @@ async function uploadCover(book: Book) {
   return s3Client.send(command);
 }
 
-async function getNewYorkTimesBooks() {
+async function getNewYorkTimesBooks(): Promise<NYTimesBook[]> {
   const response = await fetch(
     `${process.env.NY_TIMES_API_URL}/lists/full-overview.json?api-key=${process.env.NY_TIMES_API_KEY}`
   );
@@ -117,90 +174,8 @@ async function getNewYorkTimesBooks() {
       author: book.author,
       description: book.description,
       cover: book.book_image,
+      primary_isbn13: book.primary_isbn13,
     }));
-}
-
-async function getOpenLibraryData(book: NYTimesBook) {
-  const params = [
-    `title=${stringToUrl(book.title)}`,
-    `author=${stringToUrl(book.author)}`,
-    'sort=rating',
-    'limit=1',
-    'fields=title,key,author_key,subject_key',
-  ];
-
-  try {
-    const url = `https://openlibrary.org/search.json?${params.join('&')}`;
-
-    const response = await fetch(url);
-
-    const result = await response.json();
-
-    const [data] = result.docs.map((item: OpenLibraryBook) => ({
-      olid: item.key.replace('/works/', ''),
-      title: item.title,
-      author: {
-        olid: item.author_key[0],
-        name: book.author,
-      },
-    }));
-
-    return data;
-  } catch (e) {
-    console.error('Open Library Fetch', e);
-  }
-
-  return null;
-}
-
-async function getGoogleData(book: NYTimesBook) {
-  const params = [
-    `q=intitle:${stringToUrl(book.title)}+inauthor:${stringToUrl(book.author)}`,
-    'projection=full',
-    'langRestrict=en',
-  ];
-
-  const url = `https://www.googleapis.com/books/v1/volumes?${params.join('&')}`;
-
-  const response = await fetch(url);
-  const result = await response.json();
-
-  if (
-    !result.items ||
-    result.items.length === 0 ||
-    !result.items[0].volumeInfo?.categories ||
-    result.items[0].volumeInfo?.categories.length === 0
-  ) {
-    return { categories: [], cover: null, title: null, description: null };
-  }
-
-  return getVolumeData(
-    result.items[0].id,
-    result.items[0].volumeInfo.description!
-  );
-}
-
-async function getVolumeData(volumeId: string, description: string) {
-  const url = `https://www.googleapis.com/books/v1/volumes/${volumeId}`;
-
-  const response = await fetch(url);
-  const result = await response.json();
-
-  if (!result.volumeInfo) {
-    return {
-      categories: [],
-      title: '',
-      cover: '',
-      description: '',
-    };
-  }
-
-  return {
-    categories: result.volumeInfo.categories || [],
-    title: result.volumeInfo.title,
-    cover: result.volumeInfo.imageLinks?.thumbnail,
-    description,
-  };
 }
 
 async function insertAuthor(db: Client, author: Author) {
@@ -256,11 +231,12 @@ async function insertBook(db: Client, book: Book) {
   await db.query(
     `
     INSERT INTO "Books"
-      (id, name, description, subjects, source, "authorId", priority, olid, "createdAt", "updatedAt") 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      (id, isbn, name, description, subjects, source, "authorId", priority, olid, "createdAt", "updatedAt")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     `,
     [
       id,
+      book.isbn,
       book.title,
       book.description,
       book.subjects,
@@ -276,10 +252,10 @@ async function insertBook(db: Client, book: Book) {
   return { ...book, id };
 }
 
-async function getBookByOlid(db: Client, olid: string) {
+async function getBookByISBN(db: Client, isbn: string) {
   const { rows: books } = await db.query(
-    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
-    [olid]
+    `SELECT id, isbn FROM "Books" b WHERE b."isbn" = $1`,
+    [isbn]
   );
 
   if (books.length > 0) {
@@ -287,29 +263,6 @@ async function getBookByOlid(db: Client, olid: string) {
   } else {
     return null;
   }
-}
-
-function getSubjectByText(text: string) {
-  for (const subject in SUBJECTS) {
-    for (const chunk of text.split(' / ')) {
-      if (SUBJECTS[subject].includes(chunk)) {
-        return subject;
-      }
-    }
-  }
-
-  return '';
-}
-
-function stringToUrl(string: string) {
-  return string
-    .toLowerCase()
-    .replaceAll(' ', '+')
-    .replaceAll('(', '')
-    .replaceAll(')', '')
-    .replaceAll('#', '')
-    .replaceAll('-', '')
-    .replaceAll("'", '');
 }
 
 function removeDuplicates(array: string[]) {
@@ -322,6 +275,7 @@ type BooksList = {
 
 type Book = {
   id?: string;
+  isbn?: string;
   title: string;
   description?: string;
   olid?: string;
@@ -335,20 +289,14 @@ type NYTimesBook = {
   title: string;
   author: string;
   book_image: string;
+  primary_isbn13: string;
   description: string;
-};
-
-type OpenLibraryBook = {
-  key: string;
-  author_key: string[];
-  title: string;
-  subject_key: string[];
 };
 
 type Author = {
   id?: string;
   olid?: string;
-  name: string;
+  name?: string;
   subjects?: string;
 };
 

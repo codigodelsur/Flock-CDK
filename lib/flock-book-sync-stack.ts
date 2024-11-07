@@ -8,6 +8,7 @@ import path = require('path');
 import { SyncStackProps } from '../bin/flock-cdk';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import 'dotenv/config';
+import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 
 export class FlockBookSyncStack extends Stack {
   constructor(
@@ -32,6 +33,18 @@ export class FlockBookSyncStack extends Stack {
       imagesBucket = props.imagesBucket;
     }
 
+    const isbnDBKeySecret = Secret.fromSecretNameV2(
+      this,
+      'isbndb-key',
+      'isbndb-key'
+    );
+
+    const nyTimesKeySecret = Secret.fromSecretNameV2(
+      this,
+      'nytimes-key',
+      'nytimes-key'
+    );
+
     const handler = new NodejsFunction(this, `book-sync-handler-${workload}`, {
       functionName: `book-sync-handler-${workload}`,
       projectRoot,
@@ -48,7 +61,9 @@ export class FlockBookSyncStack extends Stack {
         DB_PASS: process.env.DB_PASS,
         IMAGES_BUCKET: imagesBucket.bucketName,
         NY_TIMES_API_URL: 'https://api.nytimes.com/svc/books/v3',
-        NY_TIMES_API_KEY: process.env.NY_TIMES_API_KEY,
+        NY_TIMES_API_KEY: nyTimesKeySecret.secretValue.unsafeUnwrap(),
+        ISBNDB_API_URL: 'https://api2.isbndb.com',
+        ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
       },
       bundling: {
         commandHooks: {
