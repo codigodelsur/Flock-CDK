@@ -173,56 +173,6 @@ async function upsertAuthor(db: Client, author: Author) {
   return authors[0];
 }
 
-async function getGoogleData(book: Book) {
-  const params = [
-    `q=intitle:${stringToUrl(book.name!)}+inauthor:${stringToUrl(
-      book.author!.name
-    )}`,
-    'projection=full',
-    'orderBy=newest',
-    'langRestrict=en',
-  ];
-
-  const url = `https://www.googleapis.com/books/v1/volumes?${params.join('&')}`;
-
-  const response = await fetch(url);
-  const result = await response.json();
-
-  if (!result.items || result.items.length === 0) {
-    return { categories: [], cover: null, name: null, description: null };
-  }
-
-  return getVolumeData(
-    result.items[0].id,
-    result.items[0].volumeInfo.description!
-  );
-}
-
-async function getVolumeData(volumeId: string, description: string) {
-  const url = `https://www.googleapis.com/books/v1/volumes/${volumeId}`;
-
-  const response = await fetch(url);
-  const result = await response.json();
-
-  if (!result.volumeInfo) {
-    return {
-      categories: [],
-      name: '',
-      cover: '',
-      description: '',
-    };
-  }
-
-  return {
-    categories: result.volumeInfo.categories || [],
-    name: result.volumeInfo.title,
-    cover: result.volumeInfo.imageLinks?.thumbnail
-      .replaceAll('edge=curl&', '')
-      .replaceAll('edge=curl', ''),
-    description,
-  };
-}
-
 async function uploadCover(book: Book) {
   const s3Client = new S3Client({});
 
@@ -240,17 +190,6 @@ async function uploadCover(book: Book) {
   });
 
   return s3Client.send(command);
-}
-
-function stringToUrl(string: string) {
-  return string
-    .toLowerCase()
-    .replaceAll(' ', '+')
-    .replaceAll('(', '')
-    .replaceAll(')', '')
-    .replaceAll('#', '')
-    .replaceAll('-', '')
-    .replaceAll("'", '');
 }
 
 function removeDuplicates(array: string[]) {
