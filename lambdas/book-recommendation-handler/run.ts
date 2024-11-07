@@ -7,7 +7,7 @@ handler(
       {
         messageId: '',
         receiptHandle: '',
-        body: `{"Message": "{\\"conversationId\\":\\"a8777a8c-3e8a-42f7-9ff9-70e9fa335402\\",\\"users\\":[\\"e418c428-e041-7084-82a5-3eb5c36c497e\\",\\"14b83458-3071-70c8-8d69-b50f937dd6e7\\"]}"}`,
+        body: `{"Message": "{\\"conversationId\\":\\"b9b9643b-4691-472d-bd2f-d51e2e66c4ac\\",\\"users\\":[\\"e418c428-e041-7084-82a5-3eb5c36c497e\\",\\"84d81428-1041-70e0-7c43-51f75342d754\\"]}"}`,
         attributes: {
           ApproximateReceiveCount: '',
           SentTimestamp: '',

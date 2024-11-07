@@ -223,6 +223,12 @@ export class FlockRecommendationStack extends cdk.Stack {
         : 'flock-images-stage'
     );
 
+    const isbnDBKeySecret = Secret.fromSecretNameV2(
+      this,
+      'isbndb-key',
+      'isbndb-key'
+    );
+
     const bookRecommendationHandler = new NodejsFunction(
       this,
       `book-recommendation-handler-${workload}`,
@@ -255,11 +261,14 @@ export class FlockRecommendationStack extends cdk.Stack {
           OPEN_AI_PROJECT: process.env.OPEN_AI_PROJECT,
           OPEN_AI_API_KEY: process.env.OPEN_AI_API_KEY,
           IMAGES_BUCKET: imagesBucket.bucketName,
+          ISBNDB_API_URL: 'https://api2.isbndb.com',
+          ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
         },
         bundling: {
           commandHooks: {
             afterBundling: (inputDir: string, outputDir: string): string[] => [
               `cp ${inputDir}/bundle.pem ${outputDir}`,
+              `cp ${inputDir}/subjects.json ${outputDir}`,
             ],
             beforeBundling: (
               _inputDir: string,

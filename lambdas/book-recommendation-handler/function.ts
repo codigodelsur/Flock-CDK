@@ -43,66 +43,73 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         data.users.map((userId: string) => getUser(db, userId))
       );
 
-      console.log('users', users);
+      console.log('users', JSON.stringify(users));
 
       // TODO - Add support for multi-users
       if (users.length < 2) {
         continue;
       }
 
-      const matchedBooks = users[0].books.filter((candidateBook: Book) =>
+      const matchedBooks = users[0].books.filter((candidateBook: DbBook) =>
         users[1].books.find(
-          (userBook: Book) => userBook.id === candidateBook.id
+          (userBook: DbBook) => userBook.id === candidateBook.id
         )
       );
 
       console.log('matchedBooks', matchedBooks);
 
-      let recommendations: BookRecommendation[] = [];
+      let recommendations: AIBook[] = [];
 
       for (const matchedBook of matchedBooks) {
-        const book = await getBook(db, matchedBook.bookId);
-        const aiRecommendations = await getAIRecommendations(book);
+        const dbBook = await getDBBook(db, matchedBook.bookId);
+        const aiRecommendations = await getAIRecommendations(dbBook);
         recommendations = recommendations.concat(aiRecommendations);
       }
 
-      for (const recommendation of recommendations) {
+      for (const recommendation of recommendations.slice(0, 15)) {
         console.log('recommendation', recommendation);
 
-        const [googleData, olData] = await Promise.all([
-          getGoogleData(recommendation.title, recommendation.author),
-          getOpenLibraryData(recommendation),
-        ]);
+        const isbnDbData = await getISBNDBBook(recommendation);
 
-        console.log('Open Library Data', olData);
+        console.log('isbnDbData', isbnDbData);
 
-        if (!olData) {
+        if (!isbnDbData || !isbnDbData.subjects) {
           continue;
         }
 
-        const book: Book = {
-          name: googleData.title,
-          description: googleData.description || '',
-          author: recommendation.author,
-          olid: olData.olid,
-          cover: googleData.cover,
+        const book: DbBook = {
+          isbn: isbnDbData.isbn,
+          cover: isbnDbData.cover,
+          name: isbnDbData.name,
+          description: isbnDbData.description || '',
+          subjects: isbnDbData.subjects,
         };
+
+        let olAuthor;
+
+        try {
+          olAuthor = await getOpenLibraryAuthorByBook(book);
+          console.log('Open Library Author Data', olAuthor);
+        } catch (e) {
+          console.error(e);
+        }
+
+        if (!olAuthor) {
+          continue;
+        }
 
         const authorId = await insertAuthor(
           db,
           recommendation.author,
-          olData.author.olid
+          olAuthor!.olid!,
+          isbnDbData.subjects
         );
 
-        const recommendationBookId = await insertBook(db, book, authorId);
+        const recommendedBookId = await insertBook(db, book, authorId);
 
         await Promise.all([
-          uploadCover({ ...book, id: recommendationBookId }),
-          insertBookRecommendation(
-            db,
-            data.conversationId,
-            recommendationBookId
-          ),
+          uploadCover({ ...book, id: recommendedBookId }),
+          insertBookRecommendation(db, data.conversationId, recommendedBookId),
         ]);
       }
     }
@@ -114,37 +121,30 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
   }
 };
 
-async function getOpenLibraryData(book: AIBook) {
-  const params = [
-    `title=${stringToUrl(book.title)}`,
-    `author=${stringToUrl(book.author)}`,
-    'sort=rating',
-    'limit=1',
-    'fields=title,key,author_key,subject_key',
-  ];
+async function getOpenLibraryAuthorByBook(
+  book: DbBook
+): Promise<Author | null> {
+  const authorOlid = await getOpenLibraryAuthorIdByISBN(book.isbn!);
 
-  try {
-    const url = `https://openlibrary.org/search.json?${params.join('&')}`;
-
-    const response = await fetch(url);
-
-    const result = await response.json();
-
-    const [data] = result.docs.map((item: OpenLibraryBook) => ({
-      olid: item.key.replace('/works/', ''),
-      title: item.title,
-      author: {
-        olid: item.author_key[0],
-        name: book.author,
-      },
-    }));
-
-    return data;
-  } catch (e) {
-    console.error('Open Library Fetch', e);
+  if (!authorOlid) {
+    return null;
   }
 
-  return null;
+  return {
+    olid: authorOlid,
+  };
+}
+
+async function getOpenLibraryAuthorIdByISBN(isbn: string) {
+  const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+
+  const work = await workResponse.json();
+
+  if (!work || !work.authors) {
+    return;
+  }
+
+  return work.authors[0].key.replaceAll('/authors/', '');
 }
 
 async function getUser(db: Client, userId: string) {
@@ -166,7 +166,7 @@ async function getUser(db: Client, userId: string) {
   return { id: userId, books, favoriteAuthors, favoriteGenres };
 }
 
-async function getBook(db: Client, bookId: string) {
+async function getDBBook(db: Client, bookId: string) {
   const {
     rows: [book],
   } = await db.query(
@@ -181,15 +181,15 @@ async function getBook(db: Client, bookId: string) {
   return book;
 }
 
-async function insertBook(db: Client, book: Book, authorId: string) {
+async function insertBook(db: Client, book: DbBook, authorId: string) {
   const {
     rows: [foundBook],
   } = await db.query(
     `
-      SELECT b.id, b.olid FROM "Books" b
+      SELECT b.id, b.isbn FROM "Books" b
       WHERE b.olid = $1
     `,
-    [book.olid]
+    [book.isbn]
   );
 
   if (foundBook) {
@@ -200,16 +200,17 @@ async function insertBook(db: Client, book: Book, authorId: string) {
     rows: [{ id }],
   } = await db.query(
     `
-      INSERT INTO "Books" ("id", "name", "description", "authorId", "olid", "source", "priority", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      INSERT INTO "Books" ("id", "name", "description", "subjects", "authorId", "isbn", "source", "priority", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING id
     `,
     [
       crypto.randomUUID(),
       book.name,
       book.description,
+      book.subjects,
       authorId,
-      book.olid,
+      book.isbn,
       'CHAT_GPT_RECOMMENDATION',
       0,
       new Date(),
@@ -236,7 +237,12 @@ async function insertBookRecommendation(
   return response;
 }
 
-async function insertAuthor(db: Client, name: string, olid: string) {
+async function insertAuthor(
+  db: Client,
+  name: string,
+  olid: string,
+  subjects: string
+) {
   const {
     rows: [author],
   } = await db.query(
@@ -255,17 +261,26 @@ async function insertAuthor(db: Client, name: string, olid: string) {
     rows: [{ id }],
   } = await db.query(
     `
-      INSERT INTO "Authors" ("id", "name", "bio", "olid", "source", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+      INSERT INTO "Authors" ("id", "name", "bio", "olid", "subjects", "source", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id
     `,
-    [crypto.randomUUID(), name, '', olid, 'FLOCK', new Date(), new Date()]
+    [
+      crypto.randomUUID(),
+      name,
+      '',
+      olid,
+      subjects,
+      'FLOCK',
+      new Date(),
+      new Date(),
+    ]
   );
 
   return id;
 }
 
-async function getAIRecommendations(book: Book) {
+async function getAIRecommendations(book: DbBook) {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -313,59 +328,63 @@ async function getAIRecommendations(book: Book) {
   return JSON.parse(firstChoice.message.content!).books;
 }
 
-async function getGoogleData(title: string, author: string) {
-  const params = [
-    `q=intitle:${stringToUrl(title)}+inauthor:${stringToUrl(author)}`,
-    'projection=full',
-    'langRestrict=en',
-  ];
+async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
+  const url = `${process.env.ISBNDB_API_URL}/books/${stringToUrl(
+    aiBook.author
+  )} ${stringToUrl(aiBook.title)}`;
 
-  const url = `https://www.googleapis.com/books/v1/volumes?${params.join('&')}`;
+  const response = await fetch(url, {
+    headers: { Authorization: process.env.ISBNDB_API_KEY },
+  });
 
-  const response = await fetch(url);
   const result = await response.json();
 
-  if (
-    !result.items ||
-    result.items.length === 0 ||
-    !result.items[0].volumeInfo?.categories ||
-    result.items[0].volumeInfo?.categories.length === 0
-  ) {
-    return { categories: [], cover: null, title: null, description: null };
+  if (!result.books) {
+    return null;
   }
 
-  return getVolumeData(
-    result.items[0].id,
-    result.items[0].volumeInfo.description!
-  );
-}
+  const {
+    books: [apiBook],
+  } = result;
 
-async function getVolumeData(volumeId: string, description: string) {
-  const url = `https://www.googleapis.com/books/v1/volumes/${volumeId}`;
-
-  const response = await fetch(url);
-  const result = await response.json();
-
-  if (!result.volumeInfo) {
-    return {
-      categories: [],
-      title: '',
-      cover: '',
-      description: '',
-    };
+  if (!apiBook || !apiBook.subjects) {
+    return null;
   }
+
+  const subjects = removeDuplicates(
+    removeDuplicates(
+      apiBook.subjects
+        .map((category: string) => getSubjectsByCategory(category))
+        .filter((category: string) => !!category)
+    )
+      .join(',')
+      .split(',')
+  ).join(',');
 
   return {
-    categories: result.volumeInfo.categories || [],
-    title: result.volumeInfo.title,
-    cover: result.volumeInfo.imageLinks?.thumbnail
-      .replaceAll('edge=curl&', '')
-      .replaceAll('edge=curl', ''),
-    description,
+    isbn: apiBook.isbn13,
+    cover: apiBook.image,
+    name: apiBook.title,
+    description: apiBook.synopsis,
+    subjects,
   };
 }
 
-async function uploadCover(book: Book) {
+function getSubjectsByCategory(category: string) {
+  const subjects = [];
+
+  for (const subject in SUBJECTS) {
+    for (const chunk of category.split(' / ')) {
+      if (SUBJECTS[subject].includes(chunk)) {
+        subjects.push(subject);
+      }
+    }
+  }
+
+  return removeDuplicates(subjects).join(',');
+}
+
+async function uploadCover(book: DbBook) {
   const s3Client = new S3Client({});
 
   if (!book.cover) {
@@ -395,18 +414,19 @@ function stringToUrl(string: string) {
     .replaceAll("'", '');
 }
 
-type Book = {
+function removeDuplicates(array: string[]) {
+  return Array.from(new Set(array));
+}
+
+type DbBook = {
   id?: string;
   cover?: string;
   olid?: string;
+  isbn?: string;
   name: string;
   description?: string;
-  author: string;
-};
-
-type BookRecommendation = {
-  author: string;
-  title: string;
+  author?: string;
+  subjects: string;
 };
 
 type Author = {
@@ -420,9 +440,4 @@ type AIBook = {
   author: string;
 };
 
-type OpenLibraryBook = {
-  key: string;
-  author_key: string[];
-  title: string;
-  subject_key: string[];
-};
+const SUBJECTS = require('./subjects.json');
