@@ -56,13 +56,36 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         )
       );
 
+      const matchedGenres = users[0].favoriteGenres.filter(
+        (candidateGenre: DbGenre) =>
+          users[1].favoriteGenres.find(
+            (userGenre: DbGenre) => userGenre.genreId === candidateGenre.genreId
+          )
+      );
+
       console.log('matchedBooks', matchedBooks);
+      console.log('matchedGenres', matchedGenres);
 
       let recommendations: AIBook[] = [];
 
       for (const matchedBook of matchedBooks) {
         const dbBook = await getDBBook(db, matchedBook.bookId);
-        const aiRecommendations = await getAIRecommendations(dbBook);
+        const aiRecommendations = await getAIRecommendations(dbBook, 5);
+        recommendations = recommendations.concat(aiRecommendations);
+      }
+
+      if (recommendations.length < 15) {
+        for (const matchedGenre of matchedGenres) {
+          const aiRecommendations = await getAIRecommendationsByGenre(
+            matchedGenre,
+            5
+          );
+          recommendations = recommendations.concat(aiRecommendations);
+        }
+      }
+
+      if (recommendations.length < 15) {
+        const aiRecommendations = await getAIRecommendationsByUsers(users, 10);
         recommendations = recommendations.concat(aiRecommendations);
       }
 
@@ -81,6 +104,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           isbn: isbnDbData.isbn,
           cover: isbnDbData.cover,
           name: isbnDbData.name,
+          author: isbnDbData.author,
           description: isbnDbData.description || '',
           subjects: isbnDbData.subjects,
         };
@@ -127,7 +151,7 @@ async function getOpenLibraryAuthorByBook(
   const authorOlid = await getOpenLibraryAuthorIdByISBN(book.isbn!);
 
   if (!authorOlid) {
-    return null;
+    return getOpenLibraryAuthorByName(book.author!);
   }
 
   return {
@@ -135,8 +159,28 @@ async function getOpenLibraryAuthorByBook(
   };
 }
 
+async function getOpenLibraryAuthorByName(name: string) {
+  const response = await fetch(
+    `https://openlibrary.org/search/authors.json?q=${stringToUrl(name)}`
+  );
+  const result = await response.json();
+
+  if (!result.docs || result.docs.length === 0) {
+    return null;
+  }
+
+  return {
+    olid: result.docs[0].key,
+    name,
+  };
+}
+
 async function getOpenLibraryAuthorIdByISBN(isbn: string) {
   const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+
+  if (workResponse.status !== 200) {
+    return;
+  }
 
   const work = await workResponse.json();
 
@@ -159,7 +203,7 @@ async function getUser(db: Client, userId: string) {
   );
 
   const { rows: favoriteGenres } = await db.query(
-    `SELECT "genreId" FROM "UserFavoriteGenres" ug WHERE ug."userId" = $1`,
+    `SELECT "genreId", g.name as "genreName" FROM "UserFavoriteGenres" ug INNER JOIN "Genres" g ON g.id = ug."genreId" WHERE ug."userId" = $1`,
     [userId]
   );
 
@@ -187,7 +231,7 @@ async function insertBook(db: Client, book: DbBook, authorId: string) {
   } = await db.query(
     `
       SELECT b.id, b.isbn FROM "Books" b
-      WHERE b.olid = $1
+      WHERE b.isbn = $1
     `,
     [book.isbn]
   );
@@ -280,7 +324,7 @@ async function insertAuthor(
   return id;
 }
 
-async function getAIRecommendations(book: DbBook) {
+async function getAIRecommendations(book: DbBook, count: number) {
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -290,7 +334,109 @@ async function getAIRecommendations(book: DbBook) {
       },
       {
         role: 'user',
-        content: `recommend me 5 similar books to "${book.name}" by "${book.author}"`,
+        content: `recommend me ${count} similar books to "${book.name}" by "${book.author}"`,
+      },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'books',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            books: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  author: {
+                    type: 'string',
+                  },
+                  title: { type: 'string' },
+                },
+                required: ['author', 'title'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['books'],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const [firstChoice] = response.choices;
+
+  return JSON.parse(firstChoice.message.content!).books;
+}
+
+async function getAIRecommendationsByGenre(genre: DbGenre, count: number) {
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'recommend popular books like New York Times best sellers',
+      },
+      {
+        role: 'user',
+        content: `recommend me ${count} popular and current books from subject "${genre.genreName}"`,
+      },
+    ],
+    response_format: {
+      type: 'json_schema',
+      json_schema: {
+        name: 'books',
+        strict: true,
+        schema: {
+          type: 'object',
+          properties: {
+            books: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  author: {
+                    type: 'string',
+                  },
+                  title: { type: 'string' },
+                },
+                required: ['author', 'title'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['books'],
+          additionalProperties: false,
+        },
+      },
+    },
+  });
+
+  const [firstChoice] = response.choices;
+
+  return JSON.parse(firstChoice.message.content!).books;
+}
+
+async function getAIRecommendationsByUsers(users: any[], count: number) {
+  const userContent = `recommend me ${count} popular and current books to read between two people if one of them likes ${users[0].favoriteGenres
+    .map((genre: DbGenre) => genre.genreName)
+    .join(', ')} books and the other likes ${users[1].favoriteGenres
+    .map((genre: DbGenre) => genre.genreName)
+    .join(', ')} books`;
+
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      {
+        role: 'system',
+        content: 'recommend popular books like New York Times best sellers',
+      },
+      {
+        role: 'user',
+        content: userContent,
       },
     ],
     response_format: {
@@ -333,7 +479,9 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
     aiBook.author
   )} ${stringToUrl(aiBook.title)}`;
 
-  const response = await fetch(url, {
+  const params = ['language=en'];
+
+  const response = await fetch(`${url}?${params.join('&')}`, {
     headers: { Authorization: process.env.ISBNDB_API_KEY },
   });
 
@@ -365,6 +513,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
     isbn: apiBook.isbn13,
     cover: apiBook.image,
     name: apiBook.title,
+    author: apiBook.authors && apiBook.authors[0],
     description: apiBook.synopsis,
     subjects,
   };
@@ -427,6 +576,11 @@ type DbBook = {
   description?: string;
   author?: string;
   subjects: string;
+};
+
+type DbGenre = {
+  genreId: string;
+  genreName: string;
 };
 
 type Author = {
