@@ -261,6 +261,11 @@ export class FlockApiStack extends cdk.Stack {
                     name: 'ISBNDB_API_KEY',
                     value: isbnDBKeySecret.secretValue.unsafeUnwrap(),
                   },
+                  { name: 'REPORT_FROM_EMAIL', value: 'hello@onflock.com' },
+                  {
+                    name: 'REPORT_TO_EMAIL',
+                    value: 'nverino@codigodelsur.com',
+                  },
                 ],
               },
             },
