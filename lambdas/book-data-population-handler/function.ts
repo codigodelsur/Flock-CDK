@@ -49,13 +49,13 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         const book: Book = await getISBNDBBook(dbBook);
         console.log('book with ISBNdb data', book);
 
-        book.author = await getOpenLibraryAuthorByBook(dbBook);
+        book.author = await getOpenLibraryAuthorByBook(book);
         console.log('book with OL data', book);
 
         await uploadCover(book);
 
         if (book.author) {
-          const author = await upsertAuthor(db, book.author);
+          const author = await upsertAuthor(db, book.author, book.subjects!);
           await updateBook(db, { ...book, author });
         } else {
           await updateBook(db, book);
@@ -88,6 +88,10 @@ async function getBookById(db: Client, bookId: string): Promise<Book | null> {
 async function getOpenLibraryAuthorByBook(book: Book) {
   const olid = await getOpenLibraryWorkIdByISBN(book.isbn!);
 
+  if (!olid) {
+    return getOpenLibraryAuthorByName(book.authorName!);
+  }
+
   const workResponse = await fetch(
     `https://openlibrary.org/works/${olid}.json`
   );
@@ -99,13 +103,17 @@ async function getOpenLibraryAuthorByBook(book: Book) {
   authorOlid =
     work.authors &&
     work.authors.length > 0 &&
-    work.authors[0].author?.key?.replace('/authors/', '');
+    work.authors[0].author?.key?.replaceAll('/authors/', '');
 
   return getOpenLibraryAuthor(authorOlid);
 }
 
 async function getOpenLibraryWorkIdByISBN(isbn: string) {
   const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+
+  if (workResponse.status !== 200) {
+    return;
+  }
 
   const work = await workResponse.json();
 
@@ -126,6 +134,22 @@ async function getOpenLibraryAuthor(olid: string) {
   };
 }
 
+async function getOpenLibraryAuthorByName(name: string) {
+  const response = await fetch(
+    `https://openlibrary.org/search/authors.json?q=${stringToUrl(name)}`
+  );
+  const result = await response.json();
+
+  if (!result.docs || result.docs.length === 0) {
+    return;
+  }
+
+  return {
+    olid: result.docs[0].key,
+    name,
+  };
+}
+
 function getSubjectsByCategory(category: string) {
   const subjects = [];
 
@@ -142,9 +166,10 @@ function getSubjectsByCategory(category: string) {
 
 async function updateBook(db: Client, bookData: Book) {
   await db.query(
-    `UPDATE "Books" SET description = $2, subjects = $3, "authorId" = $4, "updatedAt" = $5 WHERE id = $1`,
+    `UPDATE "Books" SET name = $2, description = $3, subjects = $4, "authorId" = $5, "updatedAt" = $6 WHERE id = $1`,
     [
       bookData.id,
+      bookData.title,
       bookData.description,
       bookData.subjects,
       bookData.author?.id || null,
@@ -153,7 +178,7 @@ async function updateBook(db: Client, bookData: Book) {
   );
 }
 
-async function upsertAuthor(db: Client, author: Author) {
+async function upsertAuthor(db: Client, author: Author, subjects: string) {
   const { rows: authors } = await db.query(
     `SELECT id, olid, name FROM "Authors" a WHERE a."olid" = $1`,
     [author.olid]
@@ -163,8 +188,8 @@ async function upsertAuthor(db: Client, author: Author) {
     const id = crypto.randomUUID();
 
     await db.query(
-      `INSERT INTO "Authors" (id, olid, name, bio, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6)`,
-      [id, author.olid, author.name, '', new Date(), new Date()]
+      `INSERT INTO "Authors" (id, olid, name, subjects, bio, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, author.olid, author.name, subjects, '', new Date(), new Date()]
     );
 
     return { ...author, id };
@@ -233,9 +258,22 @@ async function getISBNDBBook(book: Book) {
   return {
     ...book,
     cover: apiBook.image,
+    title: apiBook.title,
+    authorName: apiBook.authors[0],
     description: apiBook.synopsis,
     subjects,
   };
+}
+
+function stringToUrl(string: string) {
+  return string
+    .toLowerCase()
+    .replaceAll(' ', '+')
+    .replaceAll('(', '')
+    .replaceAll(')', '')
+    .replaceAll('#', '')
+    .replaceAll('-', '')
+    .replaceAll("'", '');
 }
 
 type Book = {
@@ -243,10 +281,12 @@ type Book = {
   olid?: string;
   isbn?: string;
   name?: string;
+  title?: string;
   author?: Author | null;
   subjects?: string;
   description?: string;
   cover?: string;
+  authorName?: string;
 };
 
 type Author = {
