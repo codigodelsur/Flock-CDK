@@ -514,7 +514,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
     cover: apiBook.image,
     name: apiBook.title,
     author: apiBook.authors && apiBook.authors[0],
-    description: apiBook.synopsis,
+    description: escapeText(apiBook.synopsis),
     subjects,
   };
 }
@@ -565,6 +565,14 @@ function stringToUrl(string: string) {
 
 function removeDuplicates(array: string[]) {
   return Array.from(new Set(array));
+}
+
+function escapeText(string: string) {
+  if (!string) {
+    return '';
+  }
+
+  return string.replaceAll(/(<[^>]+>)*/g, '');
 }
 
 type DbBook = {

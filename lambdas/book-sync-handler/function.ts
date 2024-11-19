@@ -115,10 +115,18 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
     isbn: book.primary_isbn13,
     cover: apiBook.image,
     title: apiBook.title,
-    description: apiBook.synopsis,
+    description: escapeText(apiBook.synopsis),
     subjects,
     author: null,
   };
+}
+
+function escapeText(string: string) {
+  if (!string) {
+    return '';
+  }
+
+  return string.replaceAll(/(<[^>]+>)*/g, '');
 }
 
 function getSubjectsByCategory(category: string) {

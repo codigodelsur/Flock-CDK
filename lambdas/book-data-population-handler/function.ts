@@ -260,9 +260,17 @@ async function getISBNDBBook(book: Book) {
     cover: apiBook.image,
     title: apiBook.title,
     authorName: apiBook.authors[0],
-    description: apiBook.synopsis,
+    description: escapeText(apiBook.synopsis),
     subjects,
   };
+}
+
+function escapeText(string: string) {
+  if (!string) {
+    return '';
+  }
+
+  return string.replaceAll(/(<[^>]+>)*/g, '');
 }
 
 function stringToUrl(string: string) {
