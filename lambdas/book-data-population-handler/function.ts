@@ -245,21 +245,23 @@ async function getISBNDBBook(book: Book) {
 
   const { book: apiBook } = await response.json();
 
-  const subjects = removeDuplicates(
-    removeDuplicates(
-      apiBook.subjects
-        .map((category: string) => getSubjectsByCategory(category))
-        .filter((category: string) => !!category)
-    )
-      .join(',')
-      .split(',')
-  ).join(',');
+  const subjects = apiBook.subjects
+    ? removeDuplicates(
+        removeDuplicates(
+          apiBook.subjects
+            .map((category: string) => getSubjectsByCategory(category))
+            .filter((category: string) => !!category)
+        )
+          .join(',')
+          .split(',')
+      ).join(',')
+    : '';
 
   return {
     ...book,
     cover: apiBook.image,
     title: apiBook.title,
-    authorName: apiBook.authors[0],
+    authorName: apiBook.authors ? apiBook.authors[0] : '',
     description: escapeText(apiBook.synopsis),
     subjects,
   };

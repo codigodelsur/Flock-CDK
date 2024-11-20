@@ -100,15 +100,17 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
     return { ...book, author: null };
   }
 
-  const subjects = removeDuplicates(
-    removeDuplicates(
-      apiBook.subjects
-        .map((category: string) => getSubjectsByCategory(category))
-        .filter((category: string) => !!category)
-    )
-      .join(',')
-      .split(',')
-  ).join(',');
+  const subjects = apiBook.subjects
+    ? removeDuplicates(
+        removeDuplicates(
+          apiBook.subjects
+            .map((category: string) => getSubjectsByCategory(category))
+            .filter((category: string) => !!category)
+        )
+          .join(',')
+          .split(',')
+      ).join(',')
+    : '';
 
   return {
     ...book,
