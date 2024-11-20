@@ -154,7 +154,7 @@ function getSubjectsByCategory(category: string) {
   const subjects = [];
 
   for (const subject in SUBJECTS) {
-    for (const chunk of category.split(' / ')) {
+    for (const chunk of category.split(' -> ')) {
       if (SUBJECTS[subject].includes(chunk)) {
         subjects.push(subject);
       }

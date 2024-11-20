@@ -33,7 +33,8 @@
     "Computers & Internet",
     "Computers",
     "Internet",
-    "Technology & Engineering"
+    "Technology & Engineering",
+    "Technology"
   ],
   "cookbooks_food_wine": [
     "Cookbooks, Food & Wine",
@@ -105,10 +106,13 @@
     "Nonfiction",
     "Non Fiction",
     "Non-Fiction",
-    "Self-Help"
+    "Self-Help",
+    "Social Sciences"
   ],
   "politics_current_events": [
+    "Politics & Government",
     "Politics",
+    "Politics & Social Sciences",
     "Political Science",
     "Politics & Current Events",
     "Current Events"
