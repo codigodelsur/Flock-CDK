@@ -479,7 +479,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
     aiBook.author
   )} ${stringToUrl(aiBook.title)}`;
 
-  const params = ['language=en'];
+  const params = ['language=en', 'pageSize=5'];
 
   const response = await fetch(`${url}?${params.join('&')}`, {
     headers: { Authorization: process.env.ISBNDB_API_KEY },
@@ -491,39 +491,51 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
     return null;
   }
 
-  const {
-    books: [apiBook],
-  } = result;
+  let book = null;
 
-  if (!apiBook || !apiBook.subjects) {
-    return null;
+  for (const item of result.books) {
+    if (
+      item.isbn13 &&
+      item.synopsis &&
+      item.title &&
+      item.subjects &&
+      item.image &&
+      item.authors &&
+      item.authors.length > 0
+    ) {
+      const subjects = removeDuplicates(
+        removeDuplicates(
+          item.subjects
+            .map((category: string) => getSubjectsByCategory(category))
+            .filter((category: string) => !!category)
+        )
+          .join(',')
+          .split(',')
+      ).join(',');
+
+      console.log('subjects', JSON.stringify(item.subjects))
+
+      book = {
+        isbn: item.isbn13,
+        cover: item.image,
+        name: item.title,
+        description: escapeText(item.synopsis),
+        author: item.authors[0],
+        subjects,
+      };
+
+      break;
+    }
   }
 
-  const subjects = removeDuplicates(
-    removeDuplicates(
-      apiBook.subjects
-        .map((category: string) => getSubjectsByCategory(category))
-        .filter((category: string) => !!category)
-    )
-      .join(',')
-      .split(',')
-  ).join(',');
-
-  return {
-    isbn: apiBook.isbn13,
-    cover: apiBook.image,
-    name: apiBook.title,
-    author: apiBook.authors && apiBook.authors[0],
-    description: escapeText(apiBook.synopsis),
-    subjects,
-  };
+  return book;
 }
 
 function getSubjectsByCategory(category: string) {
   const subjects = [];
 
   for (const subject in SUBJECTS) {
-    for (const chunk of category.split(' / ')) {
+    for (const chunk of category.split(' -> ')) {
       if (SUBJECTS[subject].includes(chunk)) {
         subjects.push(subject);
       }
