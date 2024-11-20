@@ -29,10 +29,10 @@ Stack for the API
 - Lambda
 
 ```bash
-npx cdk deploy FlockApiStack
+npx cdk deploy FlockApiStack-Dev
 ```
 
-### FlockRecommendation
+### Recommendation Stack
 
 Stack for the Recommendation Engine
 
@@ -43,12 +43,13 @@ Stack for the Recommendation Engine
 - Lambda
 
 ```bash
-npx cdk deploy FlockRecommendationStack-Stage
+npx cdk deploy FlockRecommendationStack-Dev
 ```
 
-### FlockRecommendation
+### Book Data Population Stack
 
-Stack for the Recommendation Engine
+Stack for the Books Data Population. When we add a book to our database, we set just initial data, we have to add more
+details to each book in a parallel service.
 
 #### Services
 
@@ -58,6 +59,20 @@ Stack for the Recommendation Engine
 
 ```bash
 npx cdk deploy FlockBookDataPopulationStack-Dev
+```
+
+### Book Sync Stack
+
+Stack for the Book Sync service, which retrieves data from NY Times Best Seller API, to add new books to our database.
+
+#### Services
+
+- SNS topic
+- SQS queue
+- Lambda
+
+```bash
+npx cdk deploy FlockBookSyncStack-Dev
 ```
 
 ## Create CDKToolkit
@@ -76,4 +91,3 @@ npm run bootstrap
 - `npx cdk deploy [StackName]` deploy a specific stack
 - `npx cdk diff` compare deployed stack with current state
 - `npx cdk synth` emits the synthesized CloudFormation template
-
