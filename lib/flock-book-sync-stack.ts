@@ -9,6 +9,7 @@ import { SyncStackProps } from '../bin/flock-cdk';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
 import 'dotenv/config';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import 'dotenv/config'
 
 export class FlockBookSyncStack extends Stack {
   constructor(

@@ -50,9 +50,9 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         continue;
       }
 
-      const matchedBooks = users[0].books.filter((candidateBook: DbBook) =>
+      const matchedBooks = users[0].books.filter((candidateBook: DbUserBook) =>
         users[1].books.find(
-          (userBook: DbBook) => userBook.id === candidateBook.id
+          (userBook: DbUserBook) => userBook.bookId === candidateBook.bookId
         )
       );
 
@@ -513,7 +513,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
           .split(',')
       ).join(',');
 
-      console.log('subjects', JSON.stringify(item.subjects))
+      console.log('subjects', JSON.stringify(item.subjects));
 
       book = {
         isbn: item.isbn13,
@@ -596,6 +596,11 @@ type DbBook = {
   description?: string;
   author?: string;
   subjects: string;
+};
+
+type DbUserBook = {
+  bookId: string;
+  category: string;
 };
 
 type DbGenre = {

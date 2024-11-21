@@ -242,6 +242,7 @@ export class FlockRecommendationStack extends cdk.Stack {
         ),
         runtime: Runtime.NODEJS_20_X,
         vpc: workload === 'dev' ? undefined : vpc,
+        // vpcSubnets: [], // us-east-1a | us-east-1b | us-east-1c
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(60),
         securityGroups:

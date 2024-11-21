@@ -9,6 +9,7 @@ import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { ApiStackProps } from '../bin/flock-cdk';
 import 'dotenv/config';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import 'dotenv/config';
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
