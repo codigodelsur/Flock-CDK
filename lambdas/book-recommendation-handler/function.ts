@@ -511,7 +511,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
   const params = ['language=en', 'pageSize=5'];
 
   const response = await fetch(`${url}?${params.join('&')}`, {
-    headers: { Authorization: process.env.ISBNDB_API_KEY },
+    headers: { Authorization: process.env.ISBNDB_API_KEY! },
   });
 
   const result = await response.json();
