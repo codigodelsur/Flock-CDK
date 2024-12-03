@@ -75,7 +75,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         const aiRecommendations = await getAIRecommendations(dbBook, 5);
 
         const filteredRecommendations = aiRecommendations.filter(
-          (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() )
+          (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() ) // We filter books that are already on the list
         );
 
         filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
@@ -91,13 +91,31 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
             matchedGenre,
             5
           );
-          recommendations = recommendations.concat(aiRecommendations);
+
+          const filteredRecommendations = aiRecommendations.filter(
+            (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() ) // We filter books that are already on the list
+          );
+  
+          filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
+            uniqueTitles.add(rec.title.toLowerCase())
+          );
+
+          recommendations = recommendations.concat(filteredRecommendations);
         }
       }
 
       if (recommendations.length < 15) {
         const aiRecommendations = await getAIRecommendationsByUsers(users, 10);
-        recommendations = recommendations.concat(aiRecommendations);
+
+        const filteredRecommendations = aiRecommendations.filter(
+          (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() ) // We filter books that are already on the list
+        );
+
+        filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
+          uniqueTitles.add(rec.title.toLowerCase())
+        );
+
+        recommendations = recommendations.concat(filteredRecommendations);
       }
 
       for (const recommendation of recommendations.slice(0, 15)) {
