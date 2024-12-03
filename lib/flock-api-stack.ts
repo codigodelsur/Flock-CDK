@@ -189,7 +189,7 @@ export class FlockApiStack extends cdk.Stack {
                   { name: 'DB_PASS', value: process.env.DB_PASS },
                   { name: 'DB_PORT', value: '5432' },
                   { name: 'DB_SSL', value: 'true' },
-                  { name: 'DB_USER', value: process.env.DB_PASS },
+                  { name: 'DB_USER', value: process.env.DB_USER },
                   {
                     name: 'IMAGES_BUCKET',
                     value: this.imagesBucket.bucketName,

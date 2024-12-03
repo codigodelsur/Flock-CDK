@@ -68,10 +68,21 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
       let recommendations: AIBook[] = [];
 
+      const uniqueTitles = new Set<string>();
+
       for (const matchedBook of matchedBooks) {
         const dbBook = await getDBBook(db, matchedBook.bookId);
         const aiRecommendations = await getAIRecommendations(dbBook, 5);
-        recommendations = recommendations.concat(aiRecommendations);
+
+        const filteredRecommendations = aiRecommendations.filter(
+          (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() )
+        );
+
+        filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
+          uniqueTitles.add(rec.title.toLowerCase())
+        );
+
+        recommendations = recommendations.concat(filteredRecommendations);
       }
 
       if (recommendations.length < 15) {
