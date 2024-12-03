@@ -4,6 +4,9 @@ import { join } from 'path';
 import { Client } from 'pg';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import OpenAI from 'openai';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const openai = new OpenAI({
   organization: process.env.OPEN_AI_ORGANIZATION,

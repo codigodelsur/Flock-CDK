@@ -14,7 +14,7 @@
     "@types/aws-lambda": "^8.10.145",
     "@types/node": "^22.5.1",
     "openai": "^4.67.3",
-    "pg": "^8.12.0"
+    "pg": "^8.13.1"
   },
   "devDependencies": {
     "@types/pg": "^8.11.8",
