@@ -240,7 +240,7 @@ async function getISBNDBBook(book: Book) {
 
   const response = await fetch(
     `${process.env.ISBNDB_API_URL}/book/${book.isbn}`,
-    { headers: { Authorization: process.env.ISBNDB_API_KEY } }
+    { headers: { Authorization: process.env.ISBNDB_API_KEY! } }
   );
 
   const { book: apiBook } = await response.json();
