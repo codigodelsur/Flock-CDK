@@ -58,8 +58,8 @@ export class FlockBookSyncStack extends Stack {
       environment: {
         DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
         DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-        DB_USER: process.env.DB_USER,
-        DB_PASS: process.env.DB_PASS,
+        DB_USER: process.env.DB_USER!,
+        DB_PASS: process.env.DB_PASS!,
         IMAGES_BUCKET: imagesBucket.bucketName,
         NY_TIMES_API_URL: 'https://api.nytimes.com/svc/books/v3',
         NY_TIMES_API_KEY: nyTimesKeySecret.secretValue.unsafeUnwrap(),
