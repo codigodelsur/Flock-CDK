@@ -78,11 +78,13 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         const aiRecommendations = await getAIRecommendations(dbBook, 5);
 
         const filteredRecommendations = aiRecommendations.filter(
-          (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() ) // We filter books that are already on the list
+          (rec: { title: string; author: string }) =>
+            !uniqueTitles.has(rec.title.toLowerCase()) // We filter books that are already on the list
         );
 
-        filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
-          uniqueTitles.add(rec.title.toLowerCase())
+        filteredRecommendations.forEach(
+          (rec: { title: string; author: string }) =>
+            uniqueTitles.add(rec.title.toLowerCase())
         );
 
         recommendations = recommendations.concat(filteredRecommendations);
@@ -96,11 +98,13 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           );
 
           const filteredRecommendations = aiRecommendations.filter(
-            (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() ) // We filter books that are already on the list
+            (rec: { title: string; author: string }) =>
+              !uniqueTitles.has(rec.title.toLowerCase()) // We filter books that are already on the list
           );
-  
-          filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
-            uniqueTitles.add(rec.title.toLowerCase())
+
+          filteredRecommendations.forEach(
+            (rec: { title: string; author: string }) =>
+              uniqueTitles.add(rec.title.toLowerCase())
           );
 
           recommendations = recommendations.concat(filteredRecommendations);
@@ -111,11 +115,13 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         const aiRecommendations = await getAIRecommendationsByUsers(users, 10);
 
         const filteredRecommendations = aiRecommendations.filter(
-          (rec: { title:string, author:string } ) => !uniqueTitles.has( rec.title.toLowerCase() ) // We filter books that are already on the list
+          (rec: { title: string; author: string }) =>
+            !uniqueTitles.has(rec.title.toLowerCase()) // We filter books that are already on the list
         );
 
-        filteredRecommendations.forEach( (rec: { title:string, author:string } ) =>
-          uniqueTitles.add(rec.title.toLowerCase())
+        filteredRecommendations.forEach(
+          (rec: { title: string; author: string }) =>
+            uniqueTitles.add(rec.title.toLowerCase())
         );
 
         recommendations = recommendations.concat(filteredRecommendations);
