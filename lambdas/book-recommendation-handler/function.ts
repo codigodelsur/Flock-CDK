@@ -4,6 +4,9 @@ import { join } from 'path';
 import { Client } from 'pg';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import OpenAI from 'openai';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const openai = new OpenAI({
   organization: process.env.OPEN_AI_ORGANIZATION,
@@ -68,10 +71,23 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
       let recommendations: AIBook[] = [];
 
+      const uniqueTitles = new Set<string>();
+
       for (const matchedBook of matchedBooks) {
         const dbBook = await getDBBook(db, matchedBook.bookId);
         const aiRecommendations = await getAIRecommendations(dbBook, 5);
-        recommendations = recommendations.concat(aiRecommendations);
+
+        const filteredRecommendations = aiRecommendations.filter(
+          (rec: { title: string; author: string }) =>
+            !uniqueTitles.has(rec.title.toLowerCase()) // We filter books that are already on the list
+        );
+
+        filteredRecommendations.forEach(
+          (rec: { title: string; author: string }) =>
+            uniqueTitles.add(rec.title.toLowerCase())
+        );
+
+        recommendations = recommendations.concat(filteredRecommendations);
       }
 
       if (recommendations.length < 15) {
@@ -80,13 +96,35 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
             matchedGenre,
             5
           );
-          recommendations = recommendations.concat(aiRecommendations);
+
+          const filteredRecommendations = aiRecommendations.filter(
+            (rec: { title: string; author: string }) =>
+              !uniqueTitles.has(rec.title.toLowerCase()) // We filter books that are already on the list
+          );
+
+          filteredRecommendations.forEach(
+            (rec: { title: string; author: string }) =>
+              uniqueTitles.add(rec.title.toLowerCase())
+          );
+
+          recommendations = recommendations.concat(filteredRecommendations);
         }
       }
 
       if (recommendations.length < 15) {
         const aiRecommendations = await getAIRecommendationsByUsers(users, 10);
-        recommendations = recommendations.concat(aiRecommendations);
+
+        const filteredRecommendations = aiRecommendations.filter(
+          (rec: { title: string; author: string }) =>
+            !uniqueTitles.has(rec.title.toLowerCase()) // We filter books that are already on the list
+        );
+
+        filteredRecommendations.forEach(
+          (rec: { title: string; author: string }) =>
+            uniqueTitles.add(rec.title.toLowerCase())
+        );
+
+        recommendations = recommendations.concat(filteredRecommendations);
       }
 
       for (const recommendation of recommendations.slice(0, 15)) {
@@ -482,7 +520,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
   const params = ['language=en', 'pageSize=5'];
 
   const response = await fetch(`${url}?${params.join('&')}`, {
-    headers: { Authorization: process.env.ISBNDB_API_KEY },
+    headers: { Authorization: process.env.ISBNDB_API_KEY! },
   });
 
   const result = await response.json();
