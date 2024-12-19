@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Port, SecurityGroup, Vpc } from 'aws-cdk-lib/aws-ec2';
+import { Port, SecurityGroup, SubnetType, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -167,6 +167,16 @@ export class FlockRecommendationStack extends cdk.Stack {
         ),
         runtime: Runtime.NODEJS_20_X,
         vpc: workload === 'dev' ? undefined : vpc,
+        vpcSubnets:
+          workload === 'dev'
+            ? undefined
+            : {
+                subnets: [
+                  vpc.publicSubnets[0],
+                  vpc.publicSubnets[1],
+                  vpc.publicSubnets[2],
+                ],
+              },
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(120),
         securityGroups:
@@ -242,7 +252,16 @@ export class FlockRecommendationStack extends cdk.Stack {
         ),
         runtime: Runtime.NODEJS_20_X,
         vpc: workload === 'dev' ? undefined : vpc,
-        // vpcSubnets: [], // us-east-1a | us-east-1b | us-east-1c
+        vpcSubnets:
+          workload === 'dev'
+            ? undefined
+            : {
+                subnets: [
+                  vpc.publicSubnets[0],
+                  vpc.publicSubnets[1],
+                  vpc.publicSubnets[2],
+                ],
+              },
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(120),
         securityGroups:
