@@ -300,6 +300,7 @@ function isBoxSet(book: { title: string; edition?: string | number }) {
   const boxSetTerms = [
     'Trilogy',
     'Books Set',
+    'Boxed Set',
     'Books Collection Set',
     'Box Set',
     'Special Collector',

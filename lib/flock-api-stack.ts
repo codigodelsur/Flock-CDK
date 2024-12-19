@@ -230,6 +230,10 @@ export class FlockApiStack extends cdk.Stack {
                       'firebase-adminsdk-l31uz@flock-89274.iam.gserviceaccount.com',
                   },
                   {
+                    name: 'FIREBASE_AUTH_URI',
+                    value: 'https://accounts.google.com/o/oauth2/auth',
+                  },
+                  {
                     name: 'FIREBASE_CLIENT_ID',
                     value: '102778840894606863219',
                   },
