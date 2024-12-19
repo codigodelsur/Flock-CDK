@@ -96,7 +96,7 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
 
   const { book: apiBook } = await response.json();
 
-  if (!apiBook) {
+  if (!apiBook || isBoxSet(apiBook)) {
     return { ...book, author: null };
   }
 
@@ -294,6 +294,26 @@ async function getBookByISBN(db: Client, isbn: string) {
 
 function removeDuplicates(array: string[]) {
   return Array.from(new Set(array));
+}
+
+function isBoxSet(book: { title: string; edition?: string | number }) {
+  const boxSetTerms = [
+    'Trilogy',
+    'Books Set',
+    'Books Collection Set',
+    'Box Set',
+    'Special Collector',
+    'Ebook Collection',
+  ];
+
+  const isBoxSetEdition =
+    book.edition &&
+    typeof book.edition === 'string' &&
+    book.edition.includes('Boxed Set');
+
+  return (
+    boxSetTerms.some((term) => book.title.includes(term)) || isBoxSetEdition
+  );
 }
 
 type BooksList = {

@@ -134,7 +134,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
         console.log('isbnDbData', isbnDbData);
 
-        if (!isbnDbData || !isbnDbData.subjects) {
+        if (!isbnDbData || !isbnDbData.subjects || !isbnDbData.cover) {
           continue;
         }
 
@@ -278,6 +278,8 @@ async function insertBook(db: Client, book: DbBook, authorId: string) {
     return foundBook.id;
   }
 
+  console.log(`Inserting ${book.name} book...`);
+
   const {
     rows: [{ id }],
   } = await db.query(
@@ -338,6 +340,8 @@ async function insertAuthor(
   if (author) {
     return author.id;
   }
+
+  console.log(`Inserting ${name} author...`);
 
   const {
     rows: [{ id }],
@@ -539,6 +543,7 @@ async function getISBNDBBook(aiBook: AIBook): Promise<DbBook | null> {
       item.subjects &&
       item.image &&
       item.authors &&
+      !isBoxSet(item.title, item.edition) &&
       item.authors.length > 0
     ) {
       const subjects = removeDuplicates(
@@ -623,6 +628,22 @@ function escapeText(string: string) {
   }
 
   return string.replaceAll(/(<[^>]+>)*/g, '');
+}
+
+function isBoxSet(title: string, edition?: string | number) {
+  const boxSetTerms = [
+    'Trilogy',
+    'Books Set',
+    'Books Collection Set',
+    'Box Set',
+    'Special Collector',
+    'Ebook Collection',
+  ];
+
+  const isBoxSetEdition =
+    edition && typeof edition === 'string' && edition.includes('Boxed Set');
+
+  return boxSetTerms.some((term) => title.includes(term)) || isBoxSetEdition;
 }
 
 type DbBook = {
