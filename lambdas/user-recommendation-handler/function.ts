@@ -39,6 +39,9 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
       const userFavoriteBooks = user.books.filter(
         (book: UserBook) => book.category === 'FAVORITE'
       );
+      const userReadBooks = user.books.filter(
+        (book: UserBook) => book.category === 'READ'
+      );
 
       const candidates = await getCandidates(db, userId);
 
@@ -74,6 +77,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
             currentlyReadingBooks: userCurrentlyReadingBooks,
             wantToReadBooks: userWantToReadBooks,
             favoriteBooks: userFavoriteBooks,
+            readBooks: userReadBooks,
           } as User,
           candidate as User
         );
@@ -157,13 +161,20 @@ function calculateScore(user: User, candidate: User) {
     user.wantToReadBooks!,
     candidate.books,
     'WANT_TO_READ',
-    100
+    1000
   );
 
   const favoriteScore = getScoreByCategory(
     user.favoriteBooks!,
     candidate.books,
     'FAVORITE',
+    100
+  );
+
+  const readScore = getScoreByCategory(
+    user.readBooks!,
+    candidate.books,
+    'READ',
     10
   );
 
@@ -183,6 +194,7 @@ function calculateScore(user: User, candidate: User) {
     currentlyReadingScore +
     wantToReadScore +
     favoriteScore +
+    readScore +
     favoriteGenreScore +
     favoriteAuthorScore
   );
@@ -354,7 +366,11 @@ type UserFavoriteGenre = {
   genreId: string;
 };
 
-type UserBookCategory = 'CURRENTLY_READING' | 'WANT_TO_READ' | 'FAVORITE';
+type UserBookCategory =
+  | 'CURRENTLY_READING'
+  | 'WANT_TO_READ'
+  | 'FAVORITE'
+  | 'READ';
 
 type User = {
   id: string;
@@ -363,6 +379,7 @@ type User = {
   currentlyReadingBooks?: UserBook[];
   wantToReadBooks?: UserBook[];
   favoriteBooks?: UserBook[];
+  readBooks?: UserBook[];
   favoriteGenres: UserFavoriteGenre[];
   favoriteAuthors: UserFavoriteAuthor[];
 };
