@@ -3,6 +3,9 @@ import { ScheduledEvent, ScheduledHandler } from 'aws-lambda';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
+import sharp from 'sharp';
+import * as dotenv from 'dotenv';
+dotenv.config();
 
 export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
   console.time('handler');
@@ -32,7 +35,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
     nyTimesBooks.map(async (newBook: NYTimesBook) => {
       const book: Book = await getISBNDBBook(newBook);
 
-      if (book.title === 'Untitled' || !book.cover) {
+      if (!book || book.title === 'Untitled' || !book.cover) {
         return null;
       }
 
@@ -89,38 +92,44 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
     return { ...book, author: null };
   }
 
-  const response = await fetch(
-    `${process.env.ISBNDB_API_URL}/book/${book.primary_isbn13}`,
-    { headers: { Authorization: process.env.ISBNDB_API_KEY } }
-  );
+  try {
+    const response = await fetch(
+      `${process.env.ISBNDB_API_URL}/book/${book.primary_isbn13}`,
+      { headers: { Authorization: process.env.ISBNDB_API_KEY } }
+    );
 
-  const { book: apiBook } = await response.json();
+    const { book: apiBook } = await response.json();
 
-  if (!apiBook || isBoxSet(apiBook)) {
-    return { ...book, author: null };
+    if (!apiBook || isBoxSet(apiBook)) {
+      return { ...book, author: null };
+    }
+
+    const subjects = apiBook.subjects
+      ? removeDuplicates(
+          removeDuplicates(
+            apiBook.subjects
+              .map((category: string) => getSubjectsByCategory(category))
+              .filter((category: string) => !!category)
+          )
+            .join(',')
+            .split(',')
+        ).join(',')
+      : '';
+
+    return {
+      ...book,
+      isbn: book.primary_isbn13,
+      cover: apiBook.image,
+      title: apiBook.title,
+      description: escapeText(apiBook.synopsis),
+      subjects,
+      author: null,
+    };
+  } catch (e) {
+    console.error(e);
   }
 
-  const subjects = apiBook.subjects
-    ? removeDuplicates(
-        removeDuplicates(
-          apiBook.subjects
-            .map((category: string) => getSubjectsByCategory(category))
-            .filter((category: string) => !!category)
-        )
-          .join(',')
-          .split(',')
-      ).join(',')
-    : '';
-
-  return {
-    ...book,
-    isbn: book.primary_isbn13,
-    cover: apiBook.image,
-    title: apiBook.title,
-    description: escapeText(apiBook.synopsis),
-    subjects,
-    author: null,
-  };
+  return { ...book, author: null };
 }
 
 function escapeText(string: string) {
@@ -178,8 +187,10 @@ async function uploadCover(book: Book) {
   const coverResponse = await fetch(book.cover!);
   const file = await coverResponse.arrayBuffer();
 
+  const resizedFile = await sharp(file).resize(400).toBuffer();
+
   const command = new PutObjectCommand({
-    Body: Buffer.from(file),
+    Body: resizedFile,
     Bucket: process.env.IMAGES_BUCKET,
     Key: `covers/${book.id}.jpg`,
   });
