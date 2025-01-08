@@ -4,9 +4,7 @@ import { join } from 'path';
 import { Client } from 'pg';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import OpenAI from 'openai';
-import * as dotenv from 'dotenv';
-
-dotenv.config();
+import sharp from 'sharp';
 
 const openai = new OpenAI({
   organization: process.env.OPEN_AI_ORGANIZATION,
@@ -598,8 +596,10 @@ async function uploadCover(book: DbBook) {
   const coverResponse = await fetch(book.cover!);
   const file = await coverResponse.arrayBuffer();
 
+  const resizedFile = await sharp(file).resize(400).toBuffer();
+
   const command = new PutObjectCommand({
-    Body: Buffer.from(file),
+    Body: resizedFile,
     Bucket: process.env.IMAGES_BUCKET,
     Key: `covers/${book.id}.jpg`,
   });

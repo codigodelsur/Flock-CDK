@@ -15,7 +15,8 @@
     "@types/node": "^22.5.1",
     "dotenv": "^16.4.7",
     "openai": "^4.67.3",
-    "pg": "^8.13.1"
+    "pg": "^8.13.1",
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@types/pg": "^8.11.8",
