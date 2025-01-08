@@ -4,8 +4,6 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
 import sharp from 'sharp';
-import * as dotenv from 'dotenv';
-dotenv.config();
 
 export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
   console.time('handler');

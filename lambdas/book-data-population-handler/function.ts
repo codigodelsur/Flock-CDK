@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
 import * as crypto from 'crypto';
+import sharp from 'sharp';
 
 const SUBJECTS = require('./subjects.json');
 
@@ -208,8 +209,10 @@ async function uploadCover(book: Book) {
   const coverResponse = await fetch(book.cover!);
   const file = await coverResponse.arrayBuffer();
 
+  const resizedFile = await sharp(file).resize(400).toBuffer();
+
   const command = new PutObjectCommand({
-    Body: Buffer.from(file),
+    Body: resizedFile,
     Bucket: process.env.IMAGES_BUCKET,
     Key: `covers/${book.id}.jpg`,
   });
