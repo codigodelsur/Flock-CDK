@@ -47,8 +47,12 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           continue;
         }
 
-        const book: Book = await getISBNDBBook(dbBook);
+        const book: Book | undefined = await getISBNDBBook(dbBook);
         console.log('book with ISBNdb data', book);
+
+        if (!book) {
+          continue;
+        }
 
         book.author = await getOpenLibraryAuthorByBook(book);
         console.log('book with OL data', book);
@@ -238,7 +242,7 @@ function isUUID(uuid: string) {
 
 async function getISBNDBBook(book: Book) {
   if (!book.isbn) {
-    return book;
+    return;
   }
 
   const response = await fetch(
@@ -247,6 +251,10 @@ async function getISBNDBBook(book: Book) {
   );
 
   const { book: apiBook } = await response.json();
+
+  if (!apiBook) {
+    return;
+  }
 
   const subjects = apiBook.subjects
     ? removeDuplicates(
