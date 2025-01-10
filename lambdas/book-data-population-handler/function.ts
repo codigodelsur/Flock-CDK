@@ -79,7 +79,7 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
 
 async function getBookById(db: Client, bookId: string): Promise<Book | null> {
   const { rows: books } = await db.query(
-    `SELECT id, olid, isbn, name FROM "Books" b WHERE b."id" = $1`,
+    `SELECT id, olid, isbn, name FROM "Books" b WHERE b."id" = $1 and b."authorId" is null`,
     [bookId]
   );
 
@@ -140,6 +140,10 @@ async function getOpenLibraryAuthor(olid: string) {
 }
 
 async function getOpenLibraryAuthorByName(name: string) {
+  if (!name) {
+    return;
+  }
+
   const response = await fetch(
     `https://openlibrary.org/search/authors.json?q=${stringToUrl(name)}`
   );

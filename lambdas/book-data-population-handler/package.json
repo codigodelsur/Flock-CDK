@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "function.ts",
   "scripts": {
-    "build": "esbuild function.ts",
+    "build": "esbuild function.ts --bundle --platform=node --external:sharp",
     "start": "tsx watch --env-file=.env run-single.ts",
     "start-single": "tsx watch --env-file=.env run-single.ts",
     "start-multi": "tsx watch --env-file=.env run-multi.ts"

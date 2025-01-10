@@ -151,7 +151,7 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
         runtime: Runtime.NODEJS_20_X,
         // vpc,
         allowPublicSubnet: true,
-        timeout: cdk.Duration.seconds(60),
+        timeout: cdk.Duration.seconds(300),
         // securityGroups: [lambdaToRDSProxyGroup],
         environment: {
           DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com', // rdsProxy.endpoint,
@@ -164,6 +164,8 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
           ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
         },
         bundling: {
+          nodeModules: ['sharp'],
+          forceDockerBundling: true,
           commandHooks: {
             afterBundling: (inputDir: string, outputDir: string): string[] => [
               `cp ${inputDir}/bundle.pem ${outputDir}`,

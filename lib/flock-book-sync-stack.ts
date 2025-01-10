@@ -67,6 +67,8 @@ export class FlockBookSyncStack extends Stack {
         ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
       },
       bundling: {
+        nodeModules: ['sharp'],
+        forceDockerBundling: true,
         commandHooks: {
           afterBundling: (inputDir: string, outputDir: string): string[] => [
             `cp ${inputDir}/bundle.pem ${outputDir}`,
