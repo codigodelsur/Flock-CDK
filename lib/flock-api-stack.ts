@@ -140,6 +140,12 @@ export class FlockApiStack extends cdk.Stack {
       'isbndb-key'
     );
 
+    const openAIKeySecret = Secret.fromSecretNameV2(
+      this,
+      'openai-key',
+      'openai-key'
+    );
+
     const appRunnerService = new CfnService(
       this,
       `${this.stackName}-apprunner-service`,
@@ -261,11 +267,25 @@ export class FlockApiStack extends cdk.Stack {
                     name: 'REGISTRATION_TOKEN_DURATION_IN_MONTHS',
                     value: '6',
                   },
+                  { name: 'ISBNDB_API_URL', value: 'https://api2.isbndb.com' },
                   { name: 'ISBNDB_URL', value: 'https://api2.isbndb.com' },
                   {
                     name: 'ISBNDB_API_KEY',
                     value: isbnDBKeySecret.secretValue.unsafeUnwrap(),
                   },
+                  {
+                    name: 'OPEN_AI_ORGANIZATION',
+                    value: 'org-1sgMYC3QFHlesU0z6YQDVEFB',
+                  },
+                  {
+                    name: 'OPEN_AI_PROJECT',
+                    value: 'proj_1O1YdxqpOcdC4MTtgJpYVKai',
+                  },
+                  {
+                    name: 'OPEN_AI_API_KEY',
+                    value: openAIKeySecret.secretValue.unsafeUnwrap(),
+                  },
+
                   { name: 'REPORT_FROM_EMAIL', value: 'hello@onflock.com' },
                   {
                     name: 'REPORT_TO_EMAIL',
