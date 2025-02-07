@@ -314,6 +314,10 @@ function isBoxSet(book: { title: string; edition?: string | number }) {
     'Box Set',
     'Special Collector',
     'Ebook Collection',
+    'Collection:',
+    'Collection - ',
+    'CD Collection',
+    'Study Guide',
   ];
 
   const isBoxSetEdition =

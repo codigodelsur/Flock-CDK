@@ -631,7 +631,7 @@ function escapeText(string: string) {
 }
 
 function isBoxSet(title: string, edition?: string | number) {
-  const boxSetTerms = [
+  const boxSetTerms =[
     'Trilogy',
     'Books Set',
     'Boxed Set',
@@ -639,6 +639,10 @@ function isBoxSet(title: string, edition?: string | number) {
     'Box Set',
     'Special Collector',
     'Ebook Collection',
+    'Collection:',
+    'Collection - ',
+    'CD Collection',
+    'Study Guide',
   ];
 
   const isBoxSetEdition =
