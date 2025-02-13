@@ -29,6 +29,16 @@ const recommendationStackDev = new FlockRecommendationStack(
   }
 );
 
+const recommendationStackProd = new FlockRecommendationStack(
+  app,
+  'FlockRecommendationStack-Prod',
+  'prod',
+  {
+    stackName: 'flock-recommendation-prod',
+    env,
+  }
+);
+
 const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
   app,
   'FlockBookDataPopulationStack-Stage',
@@ -39,11 +49,18 @@ const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
   }
 );
 
-const apiStackDev = new FlockApiStack(app, 'FlockApiStack-Dev', {
+const apiStackDev = new FlockApiStack(app, 'FlockApiStack-Dev', 'dev', {
   stackName: 'flock-api-dev',
   env,
   userUpdatedTopic: recommendationStackDev.userUpdatedTopic,
   conversationCreatedTopic: recommendationStackDev.conversationCreatedTopic,
+});
+
+const apiStackProd = new FlockApiStack(app, 'FlockApiStack-Prod', 'prod', {
+  stackName: 'flock-api-prod',
+  env,
+  userUpdatedTopic: recommendationStackProd.userUpdatedTopic,
+  conversationCreatedTopic: recommendationStackProd.conversationCreatedTopic,
 });
 
 const bookDataPopulationStackDev = new FlockBookDataPopulationStack(

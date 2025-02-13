@@ -2,19 +2,49 @@ import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Code, Function, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { join } from 'path';
-import { CfnService } from 'aws-cdk-lib/aws-apprunner';
+import { CfnService, CfnVpcConnector } from 'aws-cdk-lib/aws-apprunner';
 import { UserPool, UserPoolOperation } from 'aws-cdk-lib/aws-cognito';
-import { Effect, Policy, PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import {
+  Effect,
+  Policy,
+  PolicyStatement,
+  Role,
+  ServicePrincipal,
+} from 'aws-cdk-lib/aws-iam';
 import { BlockPublicAccess, Bucket } from 'aws-cdk-lib/aws-s3';
 import { ApiStackProps } from '../bin/flock-cdk';
 import 'dotenv/config';
 import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import 'dotenv/config';
+import {
+  Credentials,
+  DatabaseInstance,
+  DatabaseInstanceEngine,
+  PostgresEngineVersion,
+  StorageType,
+} from 'aws-cdk-lib/aws-rds';
+import {
+  InstanceClass,
+  InstanceSize,
+  InstanceType,
+  IpAddresses,
+  NatProvider,
+  Peer,
+  Port,
+  SecurityGroup,
+  SubnetType,
+  Vpc,
+} from 'aws-cdk-lib/aws-ec2';
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
 
-  constructor(scope: Construct, id: string, props?: ApiStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    workload: string,
+    props?: ApiStackProps
+  ) {
     super(scope, id, props);
 
     // Cognito (Users)
@@ -117,6 +147,11 @@ export class FlockApiStack extends cdk.Stack {
       verifyChallengeFunction
     );
 
+    const instanceRole = new Role(this, 'apprunner-instance-role', {
+      roleName: `apprunner-instance-role-${workload}`,
+      assumedBy: new ServicePrincipal('tasks.apprunner.amazonaws.com'),
+    });
+
     const userPoolClient = userPool.addClient('flock-api', {
       generateSecret: true,
       authFlows: {
@@ -128,11 +163,28 @@ export class FlockApiStack extends cdk.Stack {
       refreshTokenValidity: cdk.Duration.days(360),
     });
 
+    instanceRole.addToPolicy(
+      new PolicyStatement({
+        resources: [userPool.userPoolArn],
+        actions: ['cognito-idp:AdminDeleteUser'],
+        effect: Effect.ALLOW,
+      })
+    );
+
     // S3 Bucket (Images)
 
     this.imagesBucket = new Bucket(this, 'flock-images', {
+      bucketName: `flock-images-${workload}`,
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
     });
+
+    instanceRole.addToPolicy(
+      new PolicyStatement({
+        resources: [this.imagesBucket.bucketArn],
+        actions: ['s3:*'],
+        effect: Effect.ALLOW,
+      })
+    );
 
     const isbnDBKeySecret = Secret.fromSecretNameV2(
       this,
@@ -144,6 +196,85 @@ export class FlockApiStack extends cdk.Stack {
       this,
       'openai-key',
       'openai-key'
+    );
+
+    let vpcConnector;
+    let dbInstance;
+    let masterUserSecret;
+
+    if (workload === 'prod') {
+      const vpc = new Vpc(this, 'flock-vpc-prod', {
+        ipAddresses: IpAddresses.cidr('10.0.0.0/16'),
+        natGateways: 1,
+        subnetConfiguration: [
+          { name: 'ingress', subnetType: SubnetType.PUBLIC },
+          { name: 'rds', subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+        ],
+      });
+
+      masterUserSecret = new Secret(this, 'db-master-user-secret', {
+        secretName: 'db-master-user-secret-prod',
+        description: 'Database master user credentials',
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({ username: 'postgres' }),
+          generateStringKey: 'password',
+          passwordLength: 16,
+          excludePunctuation: true,
+        },
+      });
+
+      const dbSecurityGroup = new SecurityGroup(this, 'flock-db-sg-prod', {
+        vpc,
+        allowAllOutbound: true,
+        description: 'Ingress for Postgres Server',
+      });
+
+      dbSecurityGroup.addIngressRule(
+        Peer.ipv4(vpc.vpcCidrBlock),
+        Port.tcp(5432)
+      );
+
+      dbInstance = new DatabaseInstance(this, 'flock-db', {
+        vpc,
+        instanceIdentifier: 'flock-db-prod',
+        vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
+        instanceType: InstanceType.of(InstanceClass.T4G, InstanceSize.MICRO),
+        engine: DatabaseInstanceEngine.postgres({
+          version: PostgresEngineVersion.VER_16_3,
+        }),
+        port: 5432,
+        databaseName: 'flock_db',
+        credentials: Credentials.fromSecret(masterUserSecret),
+        securityGroups: [dbSecurityGroup],
+        multiAz: true,
+        storageType: StorageType.GP3,
+        storageEncrypted: true,
+        enablePerformanceInsights: true,
+      });
+
+      vpcConnector = new CfnVpcConnector(this, 'vpc-connector', {
+        subnets: vpc.selectSubnets({ subnetType: SubnetType.PRIVATE_WITH_EGRESS })
+          .subnetIds,
+        securityGroups: [dbSecurityGroup.securityGroupId],
+        vpcConnectorName: 'flock-vpc-prod-connector',
+        tags: [
+          {
+            key: 'Project',
+            value: 'Flock',
+          },
+          {
+            key: 'Env',
+            value: workload === 'prod' ? 'Prod' : 'Dev',
+          },
+        ],
+      });
+    }
+
+    instanceRole.addToPolicy(
+      new PolicyStatement({
+        resources: ['*'],
+        actions: ['ssm:Getparameters'],
+      })
     );
 
     const appRunnerService = new CfnService(
@@ -188,14 +319,39 @@ export class FlockApiStack extends cdk.Stack {
                   {
                     name: 'DB_HOST',
                     value:
-                      'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
+                      workload === 'prod'
+                        ? dbInstance?.dbInstanceEndpointAddress
+                        : 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
                   },
                   { name: 'DB_LOGGING', value: 'false' },
-                  { name: 'DB_NAME', value: 'flock_db_dev' }, // TODO - Don't harcode it
-                  { name: 'DB_PORT', value: '5432' },
+                  {
+                    name: 'DB_NAME',
+                    value: workload === 'prod' ? 'flock_db' : 'flock_db_dev',
+                  }, // TODO - Don't harcode it
+                  {
+                    name: 'DB_PORT',
+                    value:
+                      workload === 'prod'
+                        ? dbInstance?.dbInstanceEndpointPort
+                        : '5432',
+                  },
                   { name: 'DB_SSL', value: 'true' },
-                  { name: 'DB_USER', value: process.env.DB_USER },
-                  { name: 'DB_PASS', value: process.env.DB_PASS },
+                  {
+                    name: 'DB_USER',
+                    value:
+                      workload === 'prod'
+                        ? Credentials.fromSecret(masterUserSecret!).username
+                        : process.env.DB_USER,
+                  },
+                  {
+                    name: 'DB_PASS',
+                    value:
+                      workload === 'prod'
+                        ? Credentials.fromSecret(
+                            masterUserSecret!
+                          ).password?.unsafeUnwrap()
+                        : process.env.DB_PASS,
+                  },
                   {
                     name: 'IMAGES_BUCKET',
                     value: this.imagesBucket.bucketName,
@@ -291,17 +447,27 @@ export class FlockApiStack extends cdk.Stack {
                     name: 'REPORT_TO_EMAIL',
                     value: 'nverino@codigodelsur.com',
                   },
+                  {
+                    name: 'FLOCK_API_URL',
+                    value: 'https://znedfeu9be.us-east-1.awsapprunner.com',
+                  },
                 ],
               },
             },
             repositoryUrl: 'https://github.com/codigodelsur/Flock-API',
-            sourceCodeVersion: { type: 'BRANCH', value: 'dev' },
+            sourceCodeVersion: {
+              type: 'BRANCH',
+              value: workload === 'prod' ? 'main' : 'dev',
+            },
             sourceDirectory: '/',
           },
         },
         networkConfiguration: {
           egressConfiguration: {
-            egressType: 'DEFAULT',
+            egressType: 'VPC',
+            vpcConnectorArn: vpcConnector
+              ? vpcConnector.attrVpcConnectorArn
+              : undefined,
           },
           ingressConfiguration: {
             isPubliclyAccessible: true,
@@ -309,13 +475,17 @@ export class FlockApiStack extends cdk.Stack {
           ipAddressType: 'IPV4',
         },
         instanceConfiguration: {
+          cpu: '2048',
+          memory: '4096',
           instanceRoleArn:
-            'arn:aws:iam::431027017019:role/apprunner-secrets-manager',
+            workload === 'prod'
+              ? instanceRole.roleArn
+              : 'arn:aws:iam::431027017019:role/apprunner-secrets-manager',
         },
         tags: [
           { key: 'Project', value: 'Flock' },
           { key: 'Module', value: 'API' },
-          { key: 'Env', value: 'Dev' },
+          { key: 'Env', value: workload === 'prod' ? 'Prod' : 'Dev' },
         ],
       }
     );
