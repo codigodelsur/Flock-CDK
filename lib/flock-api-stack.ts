@@ -35,11 +35,14 @@ import {
   SubnetType,
   Vpc,
 } from 'aws-cdk-lib/aws-ec2';
+import { Topic } from 'aws-cdk-lib/aws-sns';
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
   public readonly masterUserSecret?: Secret;
   public readonly vpc?: Vpc;
+  public readonly userUpdatedTopic: Topic;
+  public readonly conversationCreatedTopic: Topic;
 
   constructor(
     scope: Construct,
@@ -182,8 +185,23 @@ export class FlockApiStack extends cdk.Stack {
 
     this.imagesBucket.grantReadWrite(instanceRole);
 
-    props!.userUpdatedTopic!.grantPublish(instanceRole);
-    props!.conversationCreatedTopic!.grantPublish(instanceRole);
+    // SNS Topic
+    this.userUpdatedTopic = new Topic(this, 'user-profile-updated-topic', {
+      displayName: 'Updated User Profile',
+      topicName: `user-profile-updated-topic-${workload}`,
+    });
+
+    this.conversationCreatedTopic = new Topic(
+      this,
+      'conversation-created-topic',
+      {
+        displayName: 'Conversation Created',
+        topicName: `conversation-created-topic-${workload}`,
+      }
+    );
+
+    this.userUpdatedTopic.grantPublish(instanceRole);
+    this.conversationCreatedTopic.grantPublish(instanceRole);
 
     const isbnDBKeySecret = Secret.fromSecretNameV2(
       this,
@@ -366,11 +384,11 @@ export class FlockApiStack extends cdk.Stack {
                   },
                   {
                     name: 'UPDATE_PROFILE_TOPIC_ARN',
-                    value: props!.userUpdatedTopic!.topicArn, // 'arn:aws:sns:us-east-1:431027017019:user-profile-updated-topic-dev',
+                    value: this.userUpdatedTopic.topicArn, // 'arn:aws:sns:us-east-1:431027017019:user-profile-updated-topic-dev',
                   },
                   {
                     name: 'CONVERSATION_CREATED_TOPIC_ARN',
-                    value: props!.conversationCreatedTopic!.topicArn,
+                    value: this.conversationCreatedTopic.topicArn,
                   },
                   {
                     name: 'CREATE_BOOK_TOPIC_ARN', // TODO - Get from topic resource

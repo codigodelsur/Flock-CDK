@@ -25,8 +25,9 @@ Stack for the API
 
 #### Services
 
-- AppRunner
+- Cognito
 - Lambda
+- AppRunner
 
 ```bash
 npx cdk deploy FlockApiStack-Dev

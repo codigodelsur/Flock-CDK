@@ -6,9 +6,8 @@ import { FlockWebStack } from '../lib/flock-web-stack';
 import { FlockRecommendationStack } from '../lib/flock-recommendation-stack';
 import { FlockBookDataPopulationStack } from '../lib/flock-book-data-population-stack';
 import { FlockBookSyncStack } from '../lib/flock-book-sync-stack';
-import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
+import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { ITopic } from 'aws-cdk-lib/aws-sns';
-import { IDatabaseInstance } from 'aws-cdk-lib/aws-rds';
 import { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { IVpc } from 'aws-cdk-lib/aws-ec2';
 
@@ -18,7 +17,13 @@ const REGION = 'us-east-1';
 const ACCOUNT = '431027017019';
 const env = { region: REGION, account: ACCOUNT };
 
-new FlockRecommendationStack(app, 'FlockRecommendationStack-Stage', 'stage', {
+const apiStackDev = new FlockApiStack(app, 'FlockApiStack-Dev', 'dev', {
+  stackName: 'flock-api-dev',
+  env,
+});
+
+const apiStackProd = new FlockApiStack(app, 'FlockApiStack-Prod', 'prod', {
+  stackName: 'flock-api-prod',
   env,
 });
 
@@ -29,8 +34,14 @@ const recommendationStackDev = new FlockRecommendationStack(
   {
     stackName: 'flock-recommendation-dev',
     env,
+    userUpdatedTopic: apiStackDev.userUpdatedTopic,
+    conversationCreatedTopic: apiStackDev.conversationCreatedTopic,
   }
 );
+
+new FlockRecommendationStack(app, 'FlockRecommendationStack-Stage', 'stage', {
+  env,
+});
 
 const recommendationStackProd = new FlockRecommendationStack(
   app,
@@ -39,22 +50,12 @@ const recommendationStackProd = new FlockRecommendationStack(
   {
     stackName: 'flock-recommendation-prod',
     env,
+    userUpdatedTopic: apiStackProd.userUpdatedTopic,
+    conversationCreatedTopic: apiStackProd.conversationCreatedTopic,
+    vpc: apiStackProd.vpc,
+    masterUserSecret: apiStackProd.masterUserSecret,
   }
 );
-
-const apiStackDev = new FlockApiStack(app, 'FlockApiStack-Dev', 'dev', {
-  stackName: 'flock-api-dev',
-  env,
-  userUpdatedTopic: recommendationStackDev.userUpdatedTopic,
-  conversationCreatedTopic: recommendationStackDev.conversationCreatedTopic,
-});
-
-const apiStackProd = new FlockApiStack(app, 'FlockApiStack-Prod', 'prod', {
-  stackName: 'flock-api-prod',
-  env,
-  userUpdatedTopic: recommendationStackProd.userUpdatedTopic,
-  conversationCreatedTopic: recommendationStackProd.conversationCreatedTopic,
-});
 
 const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
   app,
@@ -132,6 +133,13 @@ const bookSyncStackProd = new FlockBookSyncStack(
   }
 );
 
+export interface RecommendationStackProps extends cdk.StackProps {
+  userUpdatedTopic?: ITopic;
+  conversationCreatedTopic?: ITopic;
+  masterUserSecret?: ISecret;
+  vpc?: IVpc;
+}
+
 export interface SyncStackProps extends cdk.StackProps {
   imagesBucket?: IBucket;
   masterUserSecret?: ISecret;
@@ -144,8 +152,4 @@ export interface BookDataPopulationStackProps extends cdk.StackProps {
   masterUserSecret?: ISecret;
 }
 
-export interface ApiStackProps extends cdk.StackProps {
-  userUpdatedTopic?: ITopic;
-  conversationCreatedTopic?: ITopic;
-  bookCreatedTopic?: ITopic;
-}
+export interface ApiStackProps extends cdk.StackProps {}

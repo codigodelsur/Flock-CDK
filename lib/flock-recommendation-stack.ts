@@ -5,56 +5,41 @@ import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { DatabaseInstance, DatabaseInstanceEngine } from 'aws-cdk-lib/aws-rds';
 import { Bucket } from 'aws-cdk-lib/aws-s3';
-import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import { ISecret, Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { SqsSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import path = require('path');
 import 'dotenv/config';
+import { RecommendationStackProps } from '../bin/flock-cdk';
 
 export class FlockRecommendationStack extends cdk.Stack {
-  public readonly userUpdatedTopic: Topic;
-  public readonly conversationCreatedTopic: Topic;
-
   constructor(
     scope: Construct,
     id: string,
     workload: string,
-    props?: cdk.StackProps
+    props: RecommendationStackProps
   ) {
     super(scope, id, props);
 
-    // SNS Topic
-    this.userUpdatedTopic = new Topic(this, 'user-profile-updated-topic', {
-      displayName: 'Updated User Profile',
-      topicName: `user-profile-updated-topic-${workload}`,
-      // loggingConfigs: [
-      //   {
-      //     protocol: LoggingProtocol.SQS,
-      //     failureFeedbackRole: role,
-      //     successFeedbackRole: role,
-      //     successFeedbackSampleRate: 50,
-      //   },
-      // ],
-    });
+    const dbCredentials = getDBCredentials(workload, props.masterUserSecret!);
 
-    this.conversationCreatedTopic = new Topic(
-      this,
-      'conversation-created-topic',
-      {
-        displayName: 'Conversation Created',
-        topicName: `conversation-created-topic-${workload}`,
-        // loggingConfigs: [
-        //   {
-        //     protocol: LoggingProtocol.SQS,
-        //     failureFeedbackRole: role,
-        //     successFeedbackRole: role,
-        //     successFeedbackSampleRate: 50,
-        //   },
-        // ],
-      }
-    );
+    if (workload === 'stage') {
+      props.userUpdatedTopic = new Topic(this, 'user-profile-updated-topic', {
+        displayName: 'Updated User Profile',
+        topicName: `user-profile-updated-topic-${workload}`,
+      });
+
+      props.conversationCreatedTopic = new Topic(
+        this,
+        'conversation-created-topic',
+        {
+          displayName: 'Conversation Created',
+          topicName: `conversation-created-topic-${workload}`,
+        }
+      );
+    }
 
     // SQS Queue
     const userUpdatedQueue = new Queue(this, 'user-profile-updated-queue', {
@@ -63,7 +48,7 @@ export class FlockRecommendationStack extends cdk.Stack {
       // add dead-letter queue
     });
 
-    this.userUpdatedTopic.addSubscription(
+    props.userUpdatedTopic!.addSubscription(
       new SqsSubscription(userUpdatedQueue)
     );
 
@@ -78,7 +63,7 @@ export class FlockRecommendationStack extends cdk.Stack {
       }
     );
 
-    this.conversationCreatedTopic.addSubscription(
+    props.conversationCreatedTopic!.addSubscription(
       new SqsSubscription(conversationCreatedQueue)
     );
 
@@ -159,6 +144,7 @@ export class FlockRecommendationStack extends cdk.Stack {
       this,
       `user-recommendation-handler-${workload}`,
       {
+        functionName: `user-recommendation-handler-${workload}`,
         projectRoot: userRecommendationProjectRoot,
         entry: path.join(userRecommendationProjectRoot, 'function.ts'),
         depsLockFilePath: path.join(
@@ -166,32 +152,28 @@ export class FlockRecommendationStack extends cdk.Stack {
           'package-lock.json'
         ),
         runtime: Runtime.NODEJS_20_X,
-        vpc: workload === 'dev' ? undefined : vpc,
+        vpc: workload === 'prod' ? props.vpc : undefined,
         vpcSubnets:
-          workload === 'dev'
-            ? undefined
-            : {
-                subnets: [
-                  vpc.publicSubnets[0],
-                  vpc.publicSubnets[1],
-                  vpc.publicSubnets[2],
-                ],
-              },
+          workload === 'prod'
+            ? {
+                subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+              }
+            : undefined,
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(120),
-        securityGroups:
-          workload === 'dev' || !lambdaToRDSProxyGroup
-            ? undefined
-            : [lambdaToRDSProxyGroup],
+        // securityGroups:
+        //   workload === 'stage' && lambdaToRDSProxyGroup
+        //     ? [lambdaToRDSProxyGroup]
+        //     : undefined,
         environment: {
-          DB_HOST:
-            workload === 'dev' || !rdsProxy
-              ? 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com'
-              : rdsProxy.endpoint,
-          RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
-          DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-          DB_USER: process.env.DB_USER!,
-          DB_PASS: process.env.DB_PASS!,
+          DB_HOST: dbCredentials.host,
+          // workload === 'stage' && rdsProxy
+          //   ? rdsProxy.endpoint
+          //   : ,
+          // RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
+          DB_NAME: dbCredentials.name,
+          DB_USER: dbCredentials.username,
+          DB_PASS: dbCredentials.password,
         },
         bundling: {
           commandHooks: {
@@ -230,7 +212,7 @@ export class FlockRecommendationStack extends cdk.Stack {
       `flock-images-${workload}`,
       workload === 'dev'
         ? 'flock-api-dev-flockimages95de63b1-6uuwx9hyb7gv'
-        : 'flock-images-stage'
+        : `flock-images-${workload}`
     );
 
     const isbnDBKeySecret = Secret.fromSecretNameV2(
@@ -251,32 +233,25 @@ export class FlockRecommendationStack extends cdk.Stack {
           'package-lock.json'
         ),
         runtime: Runtime.NODEJS_20_X,
-        vpc: workload === 'dev' ? undefined : vpc,
+        vpc: workload === 'prod' ? props.vpc : undefined,
         vpcSubnets:
-          workload === 'dev'
-            ? undefined
-            : {
-                subnets: [
-                  vpc.publicSubnets[0],
-                  vpc.publicSubnets[1],
-                  vpc.publicSubnets[2],
-                ],
-              },
+          workload === 'prod'
+            ? {
+                subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+              }
+            : undefined,
         allowPublicSubnet: true,
         timeout: cdk.Duration.seconds(120),
-        securityGroups:
-          workload === 'dev' || !lambdaToRDSProxyGroup
-            ? undefined
-            : [lambdaToRDSProxyGroup],
+        // securityGroups:
+        //   workload === 'stage' && lambdaToRDSProxyGroup
+        //     ? [lambdaToRDSProxyGroup]
+        //     : undefined,
         environment: {
-          DB_HOST:
-            workload === 'dev' || !rdsProxy
-              ? 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com'
-              : rdsProxy.endpoint,
-          RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
-          DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-          DB_USER: process.env.DB_USER!,
-          DB_PASS: process.env.DB_PASS!,
+          DB_HOST: dbCredentials.host,
+          DB_NAME: dbCredentials.name,
+          DB_USER: dbCredentials.username,
+          DB_PASS: dbCredentials.password,
+          // RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
           OPEN_AI_ORGANIZATION: process.env.OPEN_AI_ORGANIZATION!,
           OPEN_AI_PROJECT: process.env.OPEN_AI_PROJECT!,
           OPEN_AI_API_KEY: process.env.OPEN_AI_API_KEY!,
@@ -317,3 +292,21 @@ export class FlockRecommendationStack extends cdk.Stack {
     );
   }
 }
+
+const getDBCredentials = (workload: string, secret: ISecret) => {
+  return {
+    host:
+      workload === 'prod'
+        ? secret!.secretValueFromJson('host').unsafeUnwrap()
+        : 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
+    name: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
+    password:
+      workload === 'prod'
+        ? secret!.secretValueFromJson('password').unsafeUnwrap()
+        : process.env.DB_PASS!,
+    username:
+      workload === 'prod'
+        ? secret!.secretValueFromJson('username').unsafeUnwrap()
+        : process.env.DB_USER!,
+  };
+};
