@@ -8,6 +8,9 @@ import { FlockBookDataPopulationStack } from '../lib/flock-book-data-population-
 import { FlockBookSyncStack } from '../lib/flock-book-sync-stack';
 import { Bucket, IBucket } from 'aws-cdk-lib/aws-s3';
 import { ITopic } from 'aws-cdk-lib/aws-sns';
+import { IDatabaseInstance } from 'aws-cdk-lib/aws-rds';
+import { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
+import { IVpc } from 'aws-cdk-lib/aws-ec2';
 
 const app = new cdk.App();
 
@@ -103,8 +106,23 @@ const bookSyncStackStage = new FlockBookSyncStack(
   }
 );
 
+const bookSyncStackProd = new FlockBookSyncStack(
+  app,
+  'FlockBookSyncStack-Prod',
+  'prod',
+  {
+    stackName: 'flock-book-sync-prod',
+    env,
+    imagesBucket: apiStackProd.imagesBucket,
+    masterUserSecret: apiStackProd.masterUserSecret,
+    vpc: apiStackProd.vpc,
+  }
+);
+
 export interface SyncStackProps extends cdk.StackProps {
   imagesBucket?: IBucket;
+  masterUserSecret?: ISecret;
+  vpc?: IVpc;
 }
 
 export interface BookDataPopulationStackProps extends cdk.StackProps {
@@ -114,4 +132,5 @@ export interface BookDataPopulationStackProps extends cdk.StackProps {
 export interface ApiStackProps extends cdk.StackProps {
   userUpdatedTopic?: ITopic;
   conversationCreatedTopic?: ITopic;
+  bookCreatedTopic?: ITopic;
 }

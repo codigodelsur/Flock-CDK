@@ -38,6 +38,8 @@ import {
 
 export class FlockApiStack extends cdk.Stack {
   public readonly imagesBucket: Bucket;
+  public readonly masterUserSecret?: Secret;
+  public readonly vpc?: Vpc;
 
   constructor(
     scope: Construct,
@@ -186,6 +188,9 @@ export class FlockApiStack extends cdk.Stack {
       })
     );
 
+    props!.userUpdatedTopic!.grantPublish(instanceRole);
+    props!.conversationCreatedTopic!.grantPublish(instanceRole);
+
     const isbnDBKeySecret = Secret.fromSecretNameV2(
       this,
       'isbndb-key',
@@ -200,10 +205,9 @@ export class FlockApiStack extends cdk.Stack {
 
     let vpcConnector;
     let dbInstance;
-    let masterUserSecret;
 
     if (workload === 'prod') {
-      const vpc = new Vpc(this, 'flock-vpc-prod', {
+      this.vpc = new Vpc(this, 'flock-vpc-prod', {
         ipAddresses: IpAddresses.cidr('10.0.0.0/16'),
         natGateways: 1,
         subnetConfiguration: [
@@ -212,7 +216,7 @@ export class FlockApiStack extends cdk.Stack {
         ],
       });
 
-      masterUserSecret = new Secret(this, 'db-master-user-secret', {
+      this.masterUserSecret = new Secret(this, 'db-master-user-secret', {
         secretName: 'db-master-user-secret-prod',
         description: 'Database master user credentials',
         generateSecretString: {
@@ -224,18 +228,18 @@ export class FlockApiStack extends cdk.Stack {
       });
 
       const dbSecurityGroup = new SecurityGroup(this, 'flock-db-sg-prod', {
-        vpc,
+        vpc: this.vpc,
         allowAllOutbound: true,
         description: 'Ingress for Postgres Server',
       });
 
       dbSecurityGroup.addIngressRule(
-        Peer.ipv4(vpc.vpcCidrBlock),
+        Peer.ipv4(this.vpc.vpcCidrBlock),
         Port.tcp(5432)
       );
 
       dbInstance = new DatabaseInstance(this, 'flock-db', {
-        vpc,
+        vpc: this.vpc,
         instanceIdentifier: 'flock-db-prod',
         vpcSubnets: { subnetType: SubnetType.PRIVATE_WITH_EGRESS },
         instanceType: InstanceType.of(InstanceClass.T4G, InstanceSize.MICRO),
@@ -244,7 +248,7 @@ export class FlockApiStack extends cdk.Stack {
         }),
         port: 5432,
         databaseName: 'flock_db',
-        credentials: Credentials.fromSecret(masterUserSecret),
+        credentials: Credentials.fromSecret(this.masterUserSecret),
         securityGroups: [dbSecurityGroup],
         multiAz: true,
         storageType: StorageType.GP3,
@@ -253,8 +257,9 @@ export class FlockApiStack extends cdk.Stack {
       });
 
       vpcConnector = new CfnVpcConnector(this, 'vpc-connector', {
-        subnets: vpc.selectSubnets({ subnetType: SubnetType.PRIVATE_WITH_EGRESS })
-          .subnetIds,
+        subnets: this.vpc.selectSubnets({
+          subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+        }).subnetIds,
         securityGroups: [dbSecurityGroup.securityGroupId],
         vpcConnectorName: 'flock-vpc-prod-connector',
         tags: [
@@ -320,7 +325,7 @@ export class FlockApiStack extends cdk.Stack {
                     name: 'DB_HOST',
                     value:
                       workload === 'prod'
-                        ? dbInstance?.dbInstanceEndpointAddress
+                        ? dbInstance!.dbInstanceEndpointAddress
                         : 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
                   },
                   { name: 'DB_LOGGING', value: 'false' },
@@ -340,7 +345,8 @@ export class FlockApiStack extends cdk.Stack {
                     name: 'DB_USER',
                     value:
                       workload === 'prod'
-                        ? Credentials.fromSecret(masterUserSecret!).username
+                        ? Credentials.fromSecret(this.masterUserSecret!)
+                            .username
                         : process.env.DB_USER,
                   },
                   {
@@ -348,7 +354,7 @@ export class FlockApiStack extends cdk.Stack {
                     value:
                       workload === 'prod'
                         ? Credentials.fromSecret(
-                            masterUserSecret!
+                            this.masterUserSecret!
                           ).password?.unsafeUnwrap()
                         : process.env.DB_PASS,
                   },
