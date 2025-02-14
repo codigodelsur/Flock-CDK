@@ -33,7 +33,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
     nyTimesBooks.map(async (newBook: NYTimesBook) => {
       const book: Book = await getISBNDBBook(newBook);
 
-      if (!book || book.title === 'Untitled' || !book.cover) {
+      if (!book || book.title === 'Untitled' || !book.cover || !book.isbn) {
         return null;
       }
 
@@ -95,6 +95,10 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
       `${process.env.ISBNDB_API_URL}/book/${book.primary_isbn13}`,
       { headers: { Authorization: process.env.ISBNDB_API_KEY } }
     );
+
+    if (response.status !== 200) {
+      return { ...book, author: null };
+    }
 
     const { book: apiBook } = await response.json();
 
@@ -169,6 +173,10 @@ async function getOpenLibraryAuthorByBook(
 
 async function getOpenLibraryAuthorIdByISBN(isbn: string) {
   const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+
+  if (workResponse.status !== 200) {
+    return;
+  }
 
   const work = await workResponse.json();
 
