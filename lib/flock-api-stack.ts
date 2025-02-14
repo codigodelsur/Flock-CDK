@@ -180,13 +180,7 @@ export class FlockApiStack extends cdk.Stack {
       blockPublicAccess: BlockPublicAccess.BLOCK_ALL,
     });
 
-    instanceRole.addToPolicy(
-      new PolicyStatement({
-        resources: [this.imagesBucket.bucketArn],
-        actions: ['s3:*'],
-        effect: Effect.ALLOW,
-      })
-    );
+    this.imagesBucket.grantReadWrite(instanceRole);
 
     props!.userUpdatedTopic!.grantPublish(instanceRole);
     props!.conversationCreatedTopic!.grantPublish(instanceRole);
