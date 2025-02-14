@@ -1,10 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
-import { Port, SecurityGroup, Vpc } from 'aws-cdk-lib/aws-ec2';
+import { Port, SecurityGroup, SubnetType, Vpc } from 'aws-cdk-lib/aws-ec2';
 import { Runtime } from 'aws-cdk-lib/aws-lambda';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { DatabaseProxy } from 'aws-cdk-lib/aws-rds';
-import { Secret } from 'aws-cdk-lib/aws-secretsmanager';
+import { ISecret, Secret } from 'aws-cdk-lib/aws-secretsmanager';
 import { Topic } from 'aws-cdk-lib/aws-sns';
 import { SqsSubscription } from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Queue } from 'aws-cdk-lib/aws-sqs';
@@ -15,6 +15,8 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import 'dotenv/config';
 
 export class FlockBookDataPopulationStack extends cdk.Stack {
+  public readonly bookCreatedTopic: Topic;
+
   constructor(
     scope: Construct,
     id: string,
@@ -24,6 +26,8 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
     super(scope, id, props);
 
     let imagesBucket;
+
+    const dbCredentials = getDBCredentials(workload, props.masterUserSecret!);
 
     if (!props.imagesBucket) {
       imagesBucket = Bucket.fromBucketName(
@@ -36,7 +40,7 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
     }
 
     // SNS Topic
-    const topic = new Topic(this, 'book-created-topic', {
+    this.bookCreatedTopic = new Topic(this, 'book-created-topic', {
       displayName: 'Created Book',
       topicName: `book-created-topic-${workload}`,
       // loggingConfigs: [
@@ -52,11 +56,11 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
     // SQS Queue
     const queue = new Queue(this, 'book-created-queue', {
       receiveMessageWaitTime: cdk.Duration.seconds(2),
-      visibilityTimeout: cdk.Duration.seconds(120),
+      visibilityTimeout: cdk.Duration.seconds(300),
       // add dead-letter queue
     });
 
-    topic.addSubscription(new SqsSubscription(queue));
+    this.bookCreatedTopic.addSubscription(new SqsSubscription(queue));
 
     // const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
 
@@ -149,16 +153,22 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
         entry: path.join(projectRoot, 'function.ts'),
         depsLockFilePath: path.join(projectRoot, 'package-lock.json'),
         runtime: Runtime.NODEJS_20_X,
-        // vpc,
-        allowPublicSubnet: true,
+        vpcSubnets:
+          workload === 'prod'
+            ? {
+                subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+              }
+            : undefined,
+        vpc: workload === 'prod' ? props.vpc : undefined,
+        allowPublicSubnet: workload !== 'prod',
         timeout: cdk.Duration.seconds(300),
         // securityGroups: [lambdaToRDSProxyGroup],
         environment: {
-          DB_HOST: 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com', // rdsProxy.endpoint,
-          RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
-          DB_NAME: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-          DB_USER: process.env.DB_USER!,
-          DB_PASS: process.env.DB_PASS!,
+          DB_HOST: dbCredentials.host, // rdsProxy.endpoint,
+          // RDS_SECRET_NAME: `rds-credentials-secret-${workload}`,
+          DB_NAME: dbCredentials.name,
+          DB_USER: dbCredentials.username,
+          DB_PASS: dbCredentials.password,
           IMAGES_BUCKET: imagesBucket.bucketName,
           ISBNDB_API_URL: 'https://api2.isbndb.com',
           ISBNDB_API_KEY: isbnDBKeySecret.secretValue.unsafeUnwrap(),
@@ -192,3 +202,21 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
     handler.addEventSource(new SqsEventSource(queue, { batchSize: 1 }));
   }
 }
+
+const getDBCredentials = (workload: string, secret: ISecret) => {
+  return {
+    host:
+      workload === 'prod'
+        ? secret!.secretValueFromJson('host').unsafeUnwrap()
+        : 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
+    name: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
+    password:
+      workload === 'prod'
+        ? secret!.secretValueFromJson('password').unsafeUnwrap()
+        : process.env.DB_PASS!,
+    username:
+      workload === 'prod'
+        ? secret!.secretValueFromJson('username').unsafeUnwrap()
+        : process.env.DB_USER!,
+  };
+};

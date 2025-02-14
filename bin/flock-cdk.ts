@@ -42,16 +42,6 @@ const recommendationStackProd = new FlockRecommendationStack(
   }
 );
 
-const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
-  app,
-  'FlockBookDataPopulationStack-Stage',
-  'stage',
-  {
-    stackName: 'flock-book-data-population-stage',
-    env,
-  }
-);
-
 const apiStackDev = new FlockApiStack(app, 'FlockApiStack-Dev', 'dev', {
   stackName: 'flock-api-dev',
   env,
@@ -74,6 +64,29 @@ const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
     stackName: 'flock-book-data-population-dev',
     env,
     imagesBucket: apiStackDev.imagesBucket,
+  }
+);
+
+const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
+  app,
+  'FlockBookDataPopulationStack-Stage',
+  'stage',
+  {
+    stackName: 'flock-book-data-population-stage',
+    env,
+  }
+);
+
+const bookDataPopulationStackProd = new FlockBookDataPopulationStack(
+  app,
+  'FlockBookDataPopulationStack-Prod',
+  'prod',
+  {
+    stackName: 'flock-book-data-population-prod',
+    env,
+    imagesBucket: apiStackProd.imagesBucket,
+    vpc: apiStackProd.vpc,
+    masterUserSecret: apiStackProd.masterUserSecret,
   }
 );
 
@@ -127,6 +140,8 @@ export interface SyncStackProps extends cdk.StackProps {
 
 export interface BookDataPopulationStackProps extends cdk.StackProps {
   imagesBucket?: IBucket;
+  vpc?: IVpc;
+  masterUserSecret?: ISecret;
 }
 
 export interface ApiStackProps extends cdk.StackProps {

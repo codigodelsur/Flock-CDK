@@ -57,6 +57,7 @@ export class FlockBookSyncStack extends Stack {
       runtime: Runtime.NODEJS_20_X,
       allowPublicSubnet: true,
       timeout: Duration.seconds(240),
+      memorySize: 256,
       vpcSubnets:
         workload === 'prod'
           ? {
