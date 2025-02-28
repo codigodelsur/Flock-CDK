@@ -15,8 +15,6 @@ import { Bucket } from 'aws-cdk-lib/aws-s3';
 import 'dotenv/config';
 
 export class FlockBookDataPopulationStack extends cdk.Stack {
-  public readonly bookCreatedTopic: Topic;
-
   constructor(
     scope: Construct,
     id: string,
@@ -39,20 +37,6 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
       imagesBucket = props.imagesBucket;
     }
 
-    // SNS Topic
-    this.bookCreatedTopic = new Topic(this, 'book-created-topic', {
-      displayName: 'Created Book',
-      topicName: `book-created-topic-${workload}`,
-      // loggingConfigs: [
-      //   {
-      //     protocol: LoggingProtocol.SQS,
-      //     failureFeedbackRole: role,
-      //     successFeedbackRole: role,
-      //     successFeedbackSampleRate: 50,
-      //   },
-      // ],
-    });
-
     // SQS Queue
     const queue = new Queue(this, 'book-created-queue', {
       receiveMessageWaitTime: cdk.Duration.seconds(2),
@@ -60,7 +44,14 @@ export class FlockBookDataPopulationStack extends cdk.Stack {
       // add dead-letter queue
     });
 
-    this.bookCreatedTopic.addSubscription(new SqsSubscription(queue));
+    if (workload === 'stage') {
+      props.bookCreatedTopic = new Topic(this, 'book-created-topic', {
+        displayName: 'Created Book',
+        topicName: `book-created-topic-${workload}`,
+      });
+    }
+
+    props.bookCreatedTopic!.addSubscription(new SqsSubscription(queue));
 
     // const vpc = Vpc.fromLookup(this, 'vpc', { isDefault: true });
 
