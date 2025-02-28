@@ -43,6 +43,7 @@ export class FlockApiStack extends cdk.Stack {
   public readonly vpc?: Vpc;
   public readonly userUpdatedTopic: Topic;
   public readonly conversationCreatedTopic: Topic;
+  public readonly bookCreatedTopic: Topic;
 
   constructor(
     scope: Construct,
@@ -185,7 +186,6 @@ export class FlockApiStack extends cdk.Stack {
 
     this.imagesBucket.grantReadWrite(instanceRole);
 
-    // SNS Topic
     this.userUpdatedTopic = new Topic(this, 'user-profile-updated-topic', {
       displayName: 'Updated User Profile',
       topicName: `user-profile-updated-topic-${workload}`,
@@ -200,8 +200,14 @@ export class FlockApiStack extends cdk.Stack {
       }
     );
 
+    this.bookCreatedTopic = new Topic(this, 'book-created-topic', {
+      displayName: 'Created Book',
+      topicName: `book-created-topic-${workload}`,
+    });
+
     this.userUpdatedTopic.grantPublish(instanceRole);
     this.conversationCreatedTopic.grantPublish(instanceRole);
+    this.bookCreatedTopic.grantPublish(instanceRole);
 
     const isbnDBKeySecret = Secret.fromSecretNameV2(
       this,
@@ -391,9 +397,8 @@ export class FlockApiStack extends cdk.Stack {
                     value: this.conversationCreatedTopic.topicArn,
                   },
                   {
-                    name: 'CREATE_BOOK_TOPIC_ARN', // TODO - Get from topic resource
-                    value:
-                      'arn:aws:sns:us-east-1:431027017019:book-created-topic-dev',
+                    name: 'CREATE_BOOK_TOPIC_ARN',
+                    value: this.bookCreatedTopic.topicArn,
                   },
                   {
                     name: 'FIREBASE_AUTH_CERT_URL',

@@ -10,6 +10,7 @@ import { IBucket } from 'aws-cdk-lib/aws-s3';
 import { ITopic } from 'aws-cdk-lib/aws-sns';
 import { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { IVpc } from 'aws-cdk-lib/aws-ec2';
+import { FlockNotificationsStack } from '../lib/flock-notifications-stack';
 
 const app = new cdk.App();
 
@@ -65,6 +66,7 @@ const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
     stackName: 'flock-book-data-population-dev',
     env,
     imagesBucket: apiStackDev.imagesBucket,
+    bookCreatedTopic: apiStackDev.bookCreatedTopic,
   }
 );
 
@@ -88,6 +90,7 @@ const bookDataPopulationStackProd = new FlockBookDataPopulationStack(
     imagesBucket: apiStackProd.imagesBucket,
     vpc: apiStackProd.vpc,
     masterUserSecret: apiStackProd.masterUserSecret,
+    bookCreatedTopic: apiStackProd.bookCreatedTopic,
   }
 );
 
@@ -133,6 +136,16 @@ const bookSyncStackProd = new FlockBookSyncStack(
   }
 );
 
+const notificationsStackDev = new FlockNotificationsStack(
+  app,
+  'FlockNotificationsStack-Dev',
+  'dev',
+  {
+    stackName: 'flock-notifications-dev',
+    env,
+  }
+);
+
 export interface RecommendationStackProps extends cdk.StackProps {
   userUpdatedTopic?: ITopic;
   conversationCreatedTopic?: ITopic;
@@ -146,10 +159,17 @@ export interface SyncStackProps extends cdk.StackProps {
   vpc?: IVpc;
 }
 
+export interface NotificationsStackProps extends cdk.StackProps {
+  imagesBucket?: IBucket;
+  masterUserSecret?: ISecret;
+  vpc?: IVpc;
+}
+
 export interface BookDataPopulationStackProps extends cdk.StackProps {
   imagesBucket?: IBucket;
   vpc?: IVpc;
   masterUserSecret?: ISecret;
+  bookCreatedTopic?: ITopic;
 }
 
 export interface ApiStackProps extends cdk.StackProps {}
