@@ -62,7 +62,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         user.id,
         title,
         description,
-        'CHALLENGE_PROMO',
+        { type: 'CHALLENGE_PROMO' },
         messaging,
         firestore
       );
@@ -88,7 +88,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         user.id,
         title,
         description,
-        'FIND_NEW_FRIEND',
+        { type: 'FIND_NEW_FRIEND' },
         messaging,
         firestore
       );
@@ -114,7 +114,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         user.id,
         title,
         description,
-        'FIND_NEW_FRIEND',
+        { type: 'CONTACT_PENDING' },
         messaging,
         firestore
       );
@@ -175,7 +175,7 @@ async function sendPushNotificationToUser(
   userId: string,
   title: string,
   description: string,
-  type: string,
+  data: any,
   messaging: admin.messaging.Messaging,
   firestore: FirebaseFirestore.Firestore
 ) {
@@ -187,7 +187,7 @@ async function sendPushNotificationToUser(
         title,
         description,
         device.registrationToken,
-        type,
+        data,
         device.badgeCount ? device.badgeCount + 1 : 1,
         messaging
       );
@@ -219,7 +219,7 @@ function sendNotification(
   title: string,
   message: string,
   token: string,
-  type: string,
+  data: any,
   badge: number,
   client: admin.messaging.Messaging
 ) {
@@ -227,7 +227,7 @@ function sendNotification(
     token,
     title,
     message,
-    type,
+    data,
     badge,
   });
 
@@ -237,9 +237,7 @@ function sendNotification(
       body: message,
     },
     token,
-    data: {
-      type,
-    },
+    data,
     apns: {
       payload: {
         aps: {
