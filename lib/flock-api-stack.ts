@@ -323,7 +323,9 @@ export class FlockApiStack extends cdk.Stack {
                   {
                     name: 'FIREBASE_PRIVATE_KEY',
                     value:
-                      'arn:aws:ssm:us-east-1:431027017019:parameter/FIREBASE_PRIVATE_KEY_DEV',
+                      workload === 'prod'
+                        ? 'arn:aws:ssm:us-east-1:431027017019:parameter/FIREBASE_PRIVATE_KEY_PROD'
+                        : 'arn:aws:ssm:us-east-1:431027017019:parameter/FIREBASE_PRIVATE_KEY_DEV',
                   },
                 ],
                 runtimeEnvironmentVariables: [
