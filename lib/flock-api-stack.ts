@@ -409,12 +409,16 @@ export class FlockApiStack extends cdk.Stack {
                   {
                     name: 'FIREBASE_CLIENT_CERT_URL',
                     value:
-                      'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-l31uz%40flock-89274.iam.gserviceaccount.com',
+                      workload === 'prod'
+                        ? ''
+                        : 'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-l31uz%40flock-89274.iam.gserviceaccount.com',
                   },
                   {
                     name: 'FIREBASE_CLIENT_EMAIL',
                     value:
-                      'firebase-adminsdk-l31uz@flock-89274.iam.gserviceaccount.com',
+                      workload === 'prod'
+                        ? 'firebase-adminsdk-fbsvc@flock-prod-4f34f.iam.gserviceaccount.com'
+                        : 'firebase-adminsdk-l31uz@flock-89274.iam.gserviceaccount.com',
                   },
                   {
                     name: 'FIREBASE_AUTH_URI',
@@ -422,15 +426,22 @@ export class FlockApiStack extends cdk.Stack {
                   },
                   {
                     name: 'FIREBASE_CLIENT_ID',
-                    value: '102778840894606863219',
+                    value:
+                      workload === 'prod'
+                        ? '113692911666788841685'
+                        : '102778840894606863219',
                   },
                   {
                     name: 'FIREBASE_PRIVATE_KEY_ID',
-                    value: 'aeafb95d5f0ddf29609ac661a0bf746e9b033bf9',
+                    value:
+                      workload === 'prod'
+                        ? '49663c7f60bc950d72b1252fd98f54a84331ecf3'
+                        : 'aeafb95d5f0ddf29609ac661a0bf746e9b033bf9',
                   },
                   {
                     name: 'FIREBASE_PROJECT_ID',
-                    value: 'flock-89274',
+                    value:
+                      workload === 'prod' ? 'flock-prod-4f34f' : 'flock-89274',
                   },
                   {
                     name: 'FIREBASE_TOKEN_URI',
