@@ -210,9 +210,7 @@ export class FlockRecommendationStack extends cdk.Stack {
     const imagesBucket = Bucket.fromBucketName(
       this,
       `flock-images-${workload}`,
-      workload === 'dev'
-        ? 'flock-api-dev-flockimages95de63b1-6uuwx9hyb7gv'
-        : `flock-images-${workload}`
+      `flock-images-${workload}`
     );
 
     const isbnDBKeySecret = Secret.fromSecretNameV2(

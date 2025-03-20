@@ -392,7 +392,7 @@ export class FlockApiStack extends cdk.Stack {
                   },
                   {
                     name: 'UPDATE_PROFILE_TOPIC_ARN',
-                    value: this.userUpdatedTopic.topicArn, // 'arn:aws:sns:us-east-1:431027017019:user-profile-updated-topic-dev',
+                    value: this.userUpdatedTopic.topicArn,
                   },
                   {
                     name: 'CONVERSATION_CREATED_TOPIC_ARN',
