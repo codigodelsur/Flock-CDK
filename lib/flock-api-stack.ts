@@ -485,7 +485,10 @@ export class FlockApiStack extends cdk.Stack {
                   },
                   {
                     name: 'FLOCK_API_URL',
-                    value: 'https://znedfeu9be.us-east-1.awsapprunner.com',
+                    value:
+                      workload === 'prod'
+                        ? 'https://ikkykmvu3u.us-east-1.awsapprunner.com'
+                        : 'https://znedfeu9be.us-east-1.awsapprunner.com',
                   },
                 ],
               },
