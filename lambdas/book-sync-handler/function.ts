@@ -73,7 +73,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
       const newBook = await insertBook(db, { ...book, author });
 
       if (newBook.cover) {
-        console.log(`Uploading covers/${newBook.id}.jpg`);
+        console.log(`Uploading cover from ${newBook.cover} ...`);
         await uploadCover(newBook);
       }
     }
@@ -121,7 +121,6 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
     return {
       ...book,
       isbn: book.primary_isbn13,
-      cover: apiBook.image,
       title: apiBook.title,
       description: escapeText(apiBook.synopsis),
       subjects,
