@@ -24,22 +24,23 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
   console.timeLog('handler', 'db connected');
 
   try {
-    const newBooks = await getNewBooks(db);
+    const badCoverBooks = await getBooksWithBadCovers(db);
     const refreshedBooks = [];
 
-    for (const newBook of newBooks) {
-      const isbnDBBook: Book = await getISBNDBBook(newBook);
-      console.log('isbnDBBook', isbnDBBook);
+    console.log('Bad Cover Books: %d', badCoverBooks.length);
 
-      const result = await uploadCover(isbnDBBook);
+    for (const book of badCoverBooks) {
+      const apiBook: Book = await getISBNDBBook(book);
+      console.log('apiBook', apiBook);
+
+      const result = await uploadCover(apiBook);
 
       if (result.status === 'UPLOADED') {
-        refreshedBooks.push(isbnDBBook);
-        await updateDBBookCover(db, isbnDBBook);
+        refreshedBooks.push(apiBook);
+        await updateDBBookCover(db, apiBook);
       }
     }
 
-    console.log('New Books: %d', newBooks.length);
     console.log('Refreshed Books: %d', refreshedBooks.length);
   } catch (e) {
     console.error(e);
@@ -49,7 +50,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
   }
 };
 
-async function getNewBooks(db: Client): Promise<DBBook[]> {
+async function getBooksWithBadCovers(db: Client): Promise<DBBook[]> {
   const { rows: books } = await db.query(
     `SELECT id, isbn FROM "Books" b WHERE b."goodCover" = false AND isbn != '' AND isbn IS NOT NULL`
   );
