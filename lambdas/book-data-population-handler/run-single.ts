@@ -7,7 +7,7 @@ handler(
       {
         messageId: '',
         receiptHandle: '',
-        body: `{"Message": "71bc74f1-da76-4cfa-947f-c0c11859fc98"}`,
+        body: `{"Message": "f0b68205-6365-4038-bb43-de7d4d5c3d4f"}`,
         attributes: {
           ApproximateReceiveCount: '',
           SentTimestamp: '',

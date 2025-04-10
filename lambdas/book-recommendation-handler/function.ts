@@ -165,12 +165,26 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           isbnDbData.subjects
         );
 
-        const recommendedBookId = await insertBook(db, book, authorId);
+        const newBookId = crypto.randomUUID();
 
-        await Promise.all([
-          uploadCover({ ...book, id: recommendedBookId }),
-          insertBookRecommendation(db, data.conversationId, recommendedBookId),
-        ]);
+        const coverResponse = await uploadCover({
+          ...book,
+          id: newBookId,
+        });
+
+        const recommendedBookId = await insertBook(
+          db,
+          book,
+          authorId,
+          newBookId,
+          !!coverResponse
+        );
+
+        await insertBookRecommendation(
+          db,
+          data.conversationId,
+          recommendedBookId
+        );
       }
     }
   } catch (e) {
@@ -261,7 +275,13 @@ async function getDBBook(db: Client, bookId: string) {
   return book;
 }
 
-async function insertBook(db: Client, book: DbBook, authorId: string) {
+async function insertBook(
+  db: Client,
+  book: DbBook,
+  authorId: string,
+  newBookId: string,
+  goodCover: boolean
+) {
   const {
     rows: [foundBook],
   } = await db.query(
@@ -273,6 +293,11 @@ async function insertBook(db: Client, book: DbBook, authorId: string) {
   );
 
   if (foundBook) {
+    await db.query(`UPDATE "Books" SET "goodCover" = $1 WHERE id = $2`, [
+      goodCover,
+      foundBook.id,
+    ]);
+
     return foundBook.id;
   }
 
@@ -282,12 +307,12 @@ async function insertBook(db: Client, book: DbBook, authorId: string) {
     rows: [{ id }],
   } = await db.query(
     `
-      INSERT INTO "Books" ("id", "name", "description", "subjects", "authorId", "isbn", "source", "priority", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      INSERT INTO "Books" ("id", "name", "description", "subjects", "authorId", "isbn", "source", "priority", "goodCover", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING id
     `,
     [
-      crypto.randomUUID(),
+      newBookId,
       book.name,
       book.description,
       book.subjects,
@@ -295,6 +320,7 @@ async function insertBook(db: Client, book: DbBook, authorId: string) {
       book.isbn,
       'CHAT_GPT_RECOMMENDATION',
       0,
+      goodCover,
       new Date(),
       new Date(),
     ]

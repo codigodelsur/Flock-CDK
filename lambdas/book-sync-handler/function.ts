@@ -34,6 +34,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
       const book: Book = await getISBNDBBook(newBook);
 
       if (!book || book.title === 'Untitled' || !book.cover || !book.isbn) {
+        console.log('book without data', book);
         return null;
       }
 
@@ -45,12 +46,14 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
       }
 
       if (!book.author) {
+        console.log('book without author', book.isbn);
         return null;
       }
 
       const dbBook = await getBookByISBN(db, book.isbn!);
 
       if (dbBook) {
+        console.log('book already exists', dbBook.id);
         return null;
       }
 
@@ -69,13 +72,17 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         continue;
       }
 
-      const author = await insertAuthor(db, book.author);
-      const newBook = await insertBook(db, { ...book, author });
+      const newBookId = crypto.randomUUID();
+      let coverResponse = null;
 
-      if (newBook.cover) {
-        console.log(`Uploading cover from ${newBook.cover} ...`);
-        await uploadCover(newBook);
+      if (book.cover) {
+        console.log(`Uploading cover from ${book.cover} ...`);
+        coverResponse = await uploadCover({ ...book, id: newBookId });
       }
+
+      const author = await insertAuthor(db, book.author);
+
+      await insertBook(db, { ...book, author }, newBookId, !!coverResponse);
     }
   } catch (e) {
     console.error(e);
@@ -97,6 +104,7 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
     );
 
     if (response.status !== 200) {
+      console.log('response is not correct', response.status);
       return { ...book, author: null };
     }
 
@@ -259,30 +267,42 @@ async function insertAuthor(db: Client, author: Author) {
   return authors[0];
 }
 
-async function insertBook(db: Client, book: Book) {
+async function insertBook(
+  db: Client,
+  book: Book,
+  newBookId: string,
+  goodCover: boolean
+) {
   const { rows: books } = await db.query(
-    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
-    [book.olid]
+    `SELECT id, isbn FROM "Books" b WHERE b."isbn" = $1`,
+    [book.isbn]
   );
 
   if (books.length > 0) {
+    await db.query(`UPDATE "Books" SET "goodCover" = $1 WHERE id = $2`, [
+      goodCover,
+      books[0].id,
+    ]);
+
     return books[0];
   }
 
-  const id = crypto.randomUUID();
-
   console.log(
-    `Inserting book ${JSON.stringify({ ...book, id, description: '' })}`
+    `Inserting book ${JSON.stringify({
+      ...book,
+      id: newBookId,
+      description: '',
+    })}`
   );
 
   await db.query(
     `
     INSERT INTO "Books"
-      (id, isbn, name, description, subjects, source, "authorId", priority, olid, "createdAt", "updatedAt")
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      (id, isbn, name, description, subjects, source, "authorId", priority, olid, "goodCover", "createdAt", "updatedAt")
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     `,
     [
-      id,
+      newBookId,
       book.isbn,
       book.title,
       book.description,
@@ -291,12 +311,13 @@ async function insertBook(db: Client, book: Book) {
       book.author?.id,
       PRIORITY_NY_TIMES,
       book.olid,
+      goodCover,
       new Date(),
       new Date(),
     ]
   );
 
-  return { ...book, id };
+  return { ...book, id: newBookId };
 }
 
 async function getBookByISBN(db: Client, isbn: string) {

@@ -57,13 +57,13 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
         book.author = await getOpenLibraryAuthorByBook(book);
         console.log('book with OL data', book);
 
-        await uploadCover(book);
+        const coverResponse = await uploadCover(book);
 
         if (book.author) {
           const author = await upsertAuthor(db, book.author, book.subjects!);
-          await updateBook(db, { ...book, author });
+          await updateBook(db, { ...book, author, goodCover: !!coverResponse });
         } else {
-          await updateBook(db, book);
+          await updateBook(db, { ...book, goodCover: !!coverResponse });
         }
       }
 
@@ -175,7 +175,7 @@ function getSubjectsByCategory(category: string) {
 
 async function updateBook(db: Client, bookData: Book) {
   await db.query(
-    `UPDATE "Books" SET name = $2, description = $3, subjects = $4, "authorId" = $5, "updatedAt" = $6 WHERE id = $1`,
+    `UPDATE "Books" SET name = $2, description = $3, subjects = $4, "authorId" = $5, "updatedAt" = $6, "goodCover" = $7 WHERE id = $1`,
     [
       bookData.id,
       bookData.title,
@@ -183,6 +183,7 @@ async function updateBook(db: Client, bookData: Book) {
       bookData.subjects,
       bookData.author?.id || null,
       new Date(),
+      bookData.goodCover,
     ]
   );
 }
@@ -316,6 +317,7 @@ type Book = {
   description?: string;
   cover?: string;
   authorName?: string;
+  goodCover?: boolean;
 };
 
 type Author = {
