@@ -11,6 +11,7 @@ import { ITopic } from 'aws-cdk-lib/aws-sns';
 import { ISecret } from 'aws-cdk-lib/aws-secretsmanager';
 import { IVpc } from 'aws-cdk-lib/aws-ec2';
 import { FlockNotificationsStack } from '../lib/flock-notifications-stack';
+import { FlockBookRefreshingStack } from '../lib/flock-book-refreshing-stack';
 
 const app = new cdk.App();
 
@@ -28,37 +29,27 @@ const apiStackProd = new FlockApiStack(app, 'FlockApiStack-Prod', 'prod', {
   env,
 });
 
-const recommendationStackDev = new FlockRecommendationStack(
-  app,
-  'FlockRecommendationStack-Dev',
-  'dev',
-  {
-    stackName: 'flock-recommendation-dev',
-    env,
-    userUpdatedTopic: apiStackDev.userUpdatedTopic,
-    conversationCreatedTopic: apiStackDev.conversationCreatedTopic,
-  }
-);
+new FlockRecommendationStack(app, 'FlockRecommendationStack-Dev', 'dev', {
+  stackName: 'flock-recommendation-dev',
+  env,
+  userUpdatedTopic: apiStackDev.userUpdatedTopic,
+  conversationCreatedTopic: apiStackDev.conversationCreatedTopic,
+});
 
 new FlockRecommendationStack(app, 'FlockRecommendationStack-Stage', 'stage', {
   env,
 });
 
-const recommendationStackProd = new FlockRecommendationStack(
-  app,
-  'FlockRecommendationStack-Prod',
-  'prod',
-  {
-    stackName: 'flock-recommendation-prod',
-    env,
-    userUpdatedTopic: apiStackProd.userUpdatedTopic,
-    conversationCreatedTopic: apiStackProd.conversationCreatedTopic,
-    vpc: apiStackProd.vpc,
-    masterUserSecret: apiStackProd.masterUserSecret,
-  }
-);
+new FlockRecommendationStack(app, 'FlockRecommendationStack-Prod', 'prod', {
+  stackName: 'flock-recommendation-prod',
+  env,
+  userUpdatedTopic: apiStackProd.userUpdatedTopic,
+  conversationCreatedTopic: apiStackProd.conversationCreatedTopic,
+  vpc: apiStackProd.vpc,
+  masterUserSecret: apiStackProd.masterUserSecret,
+});
 
-const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
+new FlockBookDataPopulationStack(
   app,
   'FlockBookDataPopulationStack-Dev',
   'dev',
@@ -70,7 +61,7 @@ const bookDataPopulationStackDev = new FlockBookDataPopulationStack(
   }
 );
 
-const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
+new FlockBookDataPopulationStack(
   app,
   'FlockBookDataPopulationStack-Stage',
   'stage',
@@ -80,7 +71,7 @@ const bookDataPopulationStackStage = new FlockBookDataPopulationStack(
   }
 );
 
-const bookDataPopulationStackProd = new FlockBookDataPopulationStack(
+new FlockBookDataPopulationStack(
   app,
   'FlockBookDataPopulationStack-Prod',
   'prod',
@@ -102,49 +93,35 @@ new FlockWebStack(app, 'FlockWebStack-Stage', 'stage', {
   env,
 });
 
-const bookSyncStackDev = new FlockBookSyncStack(
-  app,
-  'FlockBookSyncStack-Dev',
-  'dev',
-  {
-    stackName: 'flock-book-sync-dev',
-    env,
-    imagesBucket: apiStackDev.imagesBucket,
-  }
-);
+new FlockBookSyncStack(app, 'FlockBookSyncStack-Dev', 'dev', {
+  stackName: 'flock-book-sync-dev',
+  env,
+  imagesBucket: apiStackDev.imagesBucket,
+});
 
-const bookSyncStackStage = new FlockBookSyncStack(
-  app,
-  'FlockBookSyncStack-Stage',
-  'stage',
-  {
-    stackName: 'flock-book-sync-stage',
-    env,
-  }
-);
+new FlockBookSyncStack(app, 'FlockBookSyncStack-Stage', 'stage', {
+  stackName: 'flock-book-sync-stage',
+  env,
+});
 
-const bookSyncStackProd = new FlockBookSyncStack(
-  app,
-  'FlockBookSyncStack-Prod',
-  'prod',
-  {
-    stackName: 'flock-book-sync-prod',
-    env,
-    imagesBucket: apiStackProd.imagesBucket,
-    masterUserSecret: apiStackProd.masterUserSecret,
-    vpc: apiStackProd.vpc,
-  }
-);
+new FlockBookSyncStack(app, 'FlockBookSyncStack-Prod', 'prod', {
+  stackName: 'flock-book-sync-prod',
+  env,
+  imagesBucket: apiStackProd.imagesBucket,
+  masterUserSecret: apiStackProd.masterUserSecret,
+  vpc: apiStackProd.vpc,
+});
 
-const notificationsStackDev = new FlockNotificationsStack(
-  app,
-  'FlockNotificationsStack-Dev',
-  'dev',
-  {
-    stackName: 'flock-notifications-dev',
-    env,
-  }
-);
+new FlockNotificationsStack(app, 'FlockNotificationsStack-Dev', 'dev', {
+  stackName: 'flock-notifications-dev',
+  env,
+});
+
+new FlockBookRefreshingStack(app, 'FlockBookRefreshingStack-Dev', 'dev', {
+  stackName: 'flock-book-refreshing-dev',
+  env,
+  imagesBucket: apiStackDev.imagesBucket,
+});
 
 export interface RecommendationStackProps extends cdk.StackProps {
   userUpdatedTopic?: ITopic;
@@ -154,6 +131,12 @@ export interface RecommendationStackProps extends cdk.StackProps {
 }
 
 export interface SyncStackProps extends cdk.StackProps {
+  imagesBucket?: IBucket;
+  masterUserSecret?: ISecret;
+  vpc?: IVpc;
+}
+
+export interface BookRefreshingStackProps extends cdk.StackProps {
   imagesBucket?: IBucket;
   masterUserSecret?: ISecret;
   vpc?: IVpc;

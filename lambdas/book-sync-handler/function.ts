@@ -192,6 +192,10 @@ async function uploadCover(book: Book) {
   const coverResponse = await fetch(book.cover!);
   const file = await coverResponse.arrayBuffer();
 
+  if (file.byteLength < 5_000) {
+    return;
+  }
+
   const resizedFile = await sharp(file).resize(400).toBuffer();
 
   const command = new PutObjectCommand({

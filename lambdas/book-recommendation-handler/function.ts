@@ -596,6 +596,10 @@ async function uploadCover(book: DbBook) {
   const coverResponse = await fetch(book.cover!);
   const file = await coverResponse.arrayBuffer();
 
+  if (file.byteLength < 5_000) {
+    return;
+  }
+
   const resizedFile = await sharp(file).resize(400).toBuffer();
 
   const command = new PutObjectCommand({
@@ -631,7 +635,7 @@ function escapeText(string: string) {
 }
 
 function isBoxSet(title: string, edition?: string | number) {
-  const boxSetTerms =[
+  const boxSetTerms = [
     'Trilogy',
     'Books Set',
     'Boxed Set',

@@ -13,6 +13,7 @@ import { Construct } from 'constructs';
 import path = require('path');
 import 'dotenv/config';
 import { RecommendationStackProps } from '../bin/flock-cdk';
+import { getDBCredentials } from './db';
 
 export class FlockRecommendationStack extends cdk.Stack {
   constructor(
@@ -290,21 +291,3 @@ export class FlockRecommendationStack extends cdk.Stack {
     );
   }
 }
-
-const getDBCredentials = (workload: string, secret: ISecret) => {
-  return {
-    host:
-      workload === 'prod'
-        ? secret!.secretValueFromJson('host').unsafeUnwrap()
-        : 'flock-db-stage.cvi6m0giyhbg.us-east-1.rds.amazonaws.com',
-    name: workload === 'dev' ? 'flock_db_dev' : 'flock_db',
-    password:
-      workload === 'prod'
-        ? secret!.secretValueFromJson('password').unsafeUnwrap()
-        : process.env.DB_PASS!,
-    username:
-      workload === 'prod'
-        ? secret!.secretValueFromJson('username').unsafeUnwrap()
-        : process.env.DB_USER!,
-  };
-};
