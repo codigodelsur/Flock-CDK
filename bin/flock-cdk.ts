@@ -123,6 +123,19 @@ new FlockBookRefreshingStack(app, 'FlockBookRefreshingStack-Dev', 'dev', {
   imagesBucket: apiStackDev.imagesBucket,
 });
 
+new FlockBookRefreshingStack(app, 'FlockBookRefreshingStack-Stage', 'stage', {
+  stackName: 'flock-book-refreshing-stage',
+  env,
+});
+
+new FlockBookRefreshingStack(app, 'FlockBookRefreshingStack-Prod', 'prod', {
+  stackName: 'flock-book-refreshing-prod',
+  env,
+  imagesBucket: apiStackProd.imagesBucket,
+  masterUserSecret: apiStackProd.masterUserSecret,
+  vpc: apiStackProd.vpc,
+});
+
 export interface RecommendationStackProps extends cdk.StackProps {
   userUpdatedTopic?: ITopic;
   conversationCreatedTopic?: ITopic;
