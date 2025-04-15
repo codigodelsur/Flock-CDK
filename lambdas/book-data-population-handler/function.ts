@@ -54,16 +54,30 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           continue;
         }
 
-        book.author = await getOpenLibraryAuthorByBook(book);
+        const olResponse = await getOpenLibraryAuthorByBook(book);
+
+        book.author = olResponse.author;
+        book.olid = olResponse.olid;
+
         console.log('book with OL data', book);
 
-        const coverResponse = await uploadCover(book);
+        const foundBook = await getBookByOlId(db, book.olid);
 
-        if (book.author) {
-          const author = await upsertAuthor(db, book.author, book.subjects!);
-          await updateBook(db, { ...book, author, goodCover: !!coverResponse });
+        if (foundBook) {
+          await replaceBook(db, book.id, foundBook.id);
         } else {
-          await updateBook(db, { ...book, goodCover: !!coverResponse });
+          const coverResponse = await uploadCover(book);
+
+          if (book.author) {
+            const author = await upsertAuthor(db, book.author, book.subjects!);
+            await updateBook(db, {
+              ...book,
+              author,
+              goodCover: !!coverResponse,
+            });
+          } else {
+            await updateBook(db, { ...book, goodCover: !!coverResponse });
+          }
         }
       }
 
@@ -90,11 +104,41 @@ async function getBookById(db: Client, bookId: string): Promise<Book | null> {
   return books[0];
 }
 
+async function getBookByOlId(
+  db: Client,
+  olid: string | null | undefined
+): Promise<Book | null> {
+  if (!olid) {
+    return null;
+  }
+
+  const { rows: books } = await db.query(
+    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
+    [olid]
+  );
+
+  if (books.length === 0) {
+    return null;
+  }
+
+  return books[0];
+}
+
+async function replaceBook(db: Client, bookId: string, foundBookId: string) {
+  await db.query('UPDATE "UserBooks" SET "bookId" = $1 WHERE "bookId" = $2', [
+    foundBookId,
+    bookId,
+  ]);
+
+  await db.query('DELETE FROM "Books" WHERE id = $1', [bookId]);
+}
+
 async function getOpenLibraryAuthorByBook(book: Book) {
   const olid = await getOpenLibraryWorkIdByISBN(book.isbn!);
 
   if (!olid) {
-    return getOpenLibraryAuthorByName(book.authorName!);
+    const author = await getOpenLibraryAuthorByName(book.authorName!);
+    return { author };
   }
 
   const workResponse = await fetch(
@@ -110,7 +154,9 @@ async function getOpenLibraryAuthorByBook(book: Book) {
     work.authors.length > 0 &&
     work.authors[0].author?.key?.replaceAll('/authors/', '');
 
-  return getOpenLibraryAuthor(authorOlid);
+  const author = await getOpenLibraryAuthor(authorOlid);
+
+  return { author, olid };
 }
 
 async function getOpenLibraryWorkIdByISBN(isbn: string) {
@@ -175,7 +221,7 @@ function getSubjectsByCategory(category: string) {
 
 async function updateBook(db: Client, bookData: Book) {
   await db.query(
-    `UPDATE "Books" SET name = $2, description = $3, subjects = $4, "authorId" = $5, "updatedAt" = $6, "goodCover" = $7 WHERE id = $1`,
+    `UPDATE "Books" SET name = $2, description = $3, subjects = $4, "authorId" = $5, "updatedAt" = $6, "goodCover" = $7, olid = $8 WHERE id = $1`,
     [
       bookData.id,
       bookData.title,
@@ -184,6 +230,7 @@ async function updateBook(db: Client, bookData: Book) {
       bookData.author?.id || null,
       new Date(),
       bookData.goodCover,
+      bookData.olid,
     ]
   );
 }
