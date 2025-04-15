@@ -39,7 +39,15 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
       }
 
       try {
-        book.author = await getOpenLibraryAuthorByBook(newBook);
+        const olResponse = await getOpenLibraryAuthorByBook(newBook);
+
+        if (!olResponse) {
+          console.log('book without Open Library data', book.isbn);
+          return null;
+        }
+
+        book.author = olResponse.author;
+        book.olid = olResponse.olid;
       } catch (e) {
         console.error(e);
         return null;
@@ -50,7 +58,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         return null;
       }
 
-      const dbBook = await getBookByISBN(db, book.isbn!);
+      const dbBook = await getBookByOLID(db, book.olid!);
 
       if (dbBook) {
         console.log('book already exists', dbBook.id);
@@ -81,7 +89,6 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
       }
 
       const author = await insertAuthor(db, book.author);
-
       await insertBook(db, { ...book, author }, newBookId, !!coverResponse);
     }
   } catch (e) {
@@ -163,35 +170,58 @@ function getSubjectsByCategory(category: string) {
   return removeDuplicates(subjects).join(',');
 }
 
-async function getOpenLibraryAuthorByBook(
-  book: NYTimesBook
-): Promise<Author | null> {
-  const authorOlid = await getOpenLibraryAuthorIdByISBN(book.primary_isbn13);
+async function getOpenLibraryAuthorByBook(book: NYTimesBook) {
+  const { authorOlid, workOlid } = await getOpenLibraryAuthorIdByISBN(
+    book.primary_isbn13
+  );
 
-  if (!authorOlid) {
+  if (!authorOlid || !workOlid) {
     return null;
   }
 
   return {
-    olid: authorOlid,
-    name: book.author,
+    author: {
+      olid: authorOlid,
+      name: book.author,
+    },
+    olid: workOlid,
   };
 }
 
 async function getOpenLibraryAuthorIdByISBN(isbn: string) {
-  const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+  const editionResponse = await fetch(
+    `https://openlibrary.org/isbn/${isbn}.json`
+  );
 
-  if (workResponse.status !== 200) {
-    return;
+  if (editionResponse.status !== 200) {
+    return { authorOlid: null, workOlid: null };
   }
+
+  const edition = await editionResponse.json();
+
+  if (!edition) {
+    return { authorOlid: null, workOlid: null };
+  }
+
+  const olid = edition.works[0].key.replaceAll('/works/', '');
+
+  const workResponse = await fetch(
+    `https://openlibrary.org/works/${olid}.json`
+  );
 
   const work = await workResponse.json();
 
-  if (!work || !work.authors) {
-    return;
-  }
+  let authorOlid;
 
-  return work.authors[0].key.replaceAll('/authors/', '');
+  authorOlid =
+    work.authors &&
+    work.authors.length > 0 &&
+    work.authors[0].author?.key?.replaceAll('/authors/', '');
+
+  return {
+    authorOlid,
+    workOlid: olid,
+  };
 }
 
 async function uploadCover(book: Book) {
@@ -274,8 +304,8 @@ async function insertBook(
   goodCover: boolean
 ) {
   const { rows: books } = await db.query(
-    `SELECT id, isbn FROM "Books" b WHERE b."isbn" = $1`,
-    [book.isbn]
+    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
+    [book.olid]
   );
 
   if (books.length > 0) {
@@ -320,10 +350,10 @@ async function insertBook(
   return { ...book, id: newBookId };
 }
 
-async function getBookByISBN(db: Client, isbn: string) {
+async function getBookByOLID(db: Client, olid: string) {
   const { rows: books } = await db.query(
-    `SELECT id, isbn FROM "Books" b WHERE b."isbn" = $1`,
-    [isbn]
+    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
+    [olid]
   );
 
   if (books.length > 0) {
