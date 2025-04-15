@@ -27,10 +27,10 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
 
   const nyTimesBooks = await getNewYorkTimesBooks();
 
-  console.log('nyTimesBooks', nyTimesBooks.slice(0, 5));
+  console.log('nyTimesBooks', nyTimesBooks);
 
   const books = await Promise.all(
-    nyTimesBooks.slice(0, 5).map(async (newBook: NYTimesBook) => {
+    nyTimesBooks.map(async (newBook: NYTimesBook) => {
       const book: Book = await getISBNDBBook(newBook);
 
       if (!book || book.title === 'Untitled' || !book.cover || !book.isbn) {
