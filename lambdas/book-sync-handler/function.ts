@@ -27,10 +27,10 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
 
   const nyTimesBooks = await getNewYorkTimesBooks();
 
-  console.log('nyTimesBooks', nyTimesBooks);
+  console.log('nyTimesBooks', nyTimesBooks.slice(0, 5));
 
   const books = await Promise.all(
-    nyTimesBooks.map(async (newBook: NYTimesBook) => {
+    nyTimesBooks.slice(0, 5).map(async (newBook: NYTimesBook) => {
       const book: Book = await getISBNDBBook(newBook);
 
       if (!book || book.title === 'Untitled' || !book.cover || !book.isbn) {
@@ -137,7 +137,9 @@ async function getISBNDBBook(book: NYTimesBook): Promise<Book> {
       ...book,
       isbn: book.primary_isbn13,
       title: apiBook.title,
-      description: escapeText(apiBook.synopsis),
+      description: apiBook.synopsis
+        ? escapeText(apiBook.synopsis)
+        : book.description,
       subjects,
       author: null,
     };
