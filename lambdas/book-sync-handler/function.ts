@@ -31,6 +31,13 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
 
   const books = await Promise.all(
     nyTimesBooks.map(async (newBook: NYTimesBook) => {
+      const exists = await dbBookExistsByISBN(db, newBook.primary_isbn13);
+
+      if (exists) {
+        console.log('book already exists', newBook.primary_isbn13);
+        return null;
+      }
+
       const book: Book = await getISBNDBBook(newBook);
 
       if (!book || book.title === 'Untitled' || !book.cover || !book.isbn) {
@@ -42,7 +49,6 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         const olResponse = await getOpenLibraryAuthorByBook(newBook);
 
         if (!olResponse) {
-          console.log('book without Open Library data', book.isbn);
           return null;
         }
 
@@ -196,6 +202,9 @@ async function getOpenLibraryAuthorIdByISBN(isbn: string) {
   );
 
   if (editionResponse.status !== 200) {
+    console.log(
+      `edition ${isbn} request failed [status=${editionResponse.status}]`
+    );
     return { authorOlid: null, workOlid: null };
   }
 
@@ -210,6 +219,11 @@ async function getOpenLibraryAuthorIdByISBN(isbn: string) {
   const workResponse = await fetch(
     `https://openlibrary.org/works/${olid}.json`
   );
+
+  if (workResponse.status !== 200) {
+    console.log(`book ${olid} request failed [status=${workResponse.status}]`);
+    return { authorOlid: null, workOlid: olid };
+  }
 
   const work = await workResponse.json();
 
@@ -230,6 +244,12 @@ async function uploadCover(book: Book) {
   const s3Client = new S3Client({});
 
   const coverResponse = await fetch(book.cover!);
+
+  if (coverResponse.status !== 200) {
+    console.log(`cover request failed [status=${coverResponse.status}]`);
+    return;
+  }
+
   const file = await coverResponse.arrayBuffer();
 
   if (file.byteLength < 5_000) {
@@ -363,6 +383,15 @@ async function getDbBook(db: Client, book: Book) {
   } else {
     return null;
   }
+}
+
+async function dbBookExistsByISBN(db: Client, isbn: string) {
+  const { rows: books } = await db.query(
+    `SELECT id, olid, isbn FROM "Books" b WHERE b.isbn = $1`,
+    [isbn]
+  );
+
+  return books.length > 0;
 }
 
 function removeDuplicates(array: string[]) {
