@@ -27,10 +27,10 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
 
   const nyTimesBooks = await getNewYorkTimesBooks();
 
-  console.log('nyTimesBooks', nyTimesBooks);
+  console.log('nyTimesBooks', nyTimesBooks.slice(5, 15));
 
   const books = await Promise.all(
-    nyTimesBooks.map(async (newBook: NYTimesBook) => {
+    nyTimesBooks.slice(5, 15).map(async (newBook: NYTimesBook) => {
       const book: Book = await getISBNDBBook(newBook);
 
       if (!book || book.title === 'Untitled' || !book.cover || !book.isbn) {
@@ -58,7 +58,7 @@ export const handler: ScheduledHandler = async (event: ScheduledEvent) => {
         return null;
       }
 
-      const dbBook = await getBookByOLID(db, book.olid!);
+      const dbBook = await getDbBook(db, book);
 
       if (dbBook) {
         console.log('book already exists', dbBook.id);
@@ -306,8 +306,8 @@ async function insertBook(
   goodCover: boolean
 ) {
   const { rows: books } = await db.query(
-    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
-    [book.olid]
+    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1 or b.isbn = $2`,
+    [book.olid, book.isbn]
   );
 
   if (books.length > 0) {
@@ -352,10 +352,10 @@ async function insertBook(
   return { ...book, id: newBookId };
 }
 
-async function getBookByOLID(db: Client, olid: string) {
+async function getDbBook(db: Client, book: Book) {
   const { rows: books } = await db.query(
-    `SELECT id, olid FROM "Books" b WHERE b."olid" = $1`,
-    [olid]
+    `SELECT id, olid, isbn FROM "Books" b WHERE b."olid" = $1 or b.isbn = $2`,
+    [book.olid, book.isbn]
   );
 
   if (books.length > 0) {

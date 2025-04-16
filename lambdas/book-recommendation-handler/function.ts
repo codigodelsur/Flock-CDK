@@ -143,13 +143,17 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
           author: isbnDbData.author,
           description: isbnDbData.description || '',
           subjects: isbnDbData.subjects,
+          olid: null,
         };
 
         let olAuthor;
 
         try {
-          olAuthor = await getOpenLibraryAuthorByBook(book);
-          console.log('Open Library Author Data', olAuthor);
+          const olResponse = await getOpenLibraryAuthorByBook(book);
+          console.log('Open Library Author Data', olResponse);
+
+          olAuthor = olResponse.author;
+          book.olid = olResponse.olid;
         } catch (e) {
           console.error(e);
         }
@@ -195,17 +199,24 @@ export const handler: SQSHandler = async (event: SQSEvent) => {
   }
 };
 
-async function getOpenLibraryAuthorByBook(
-  book: DbBook
-): Promise<Author | null> {
-  const authorOlid = await getOpenLibraryAuthorIdByISBN(book.isbn!);
+async function getOpenLibraryAuthorByBook(book: DbBook) {
+  const { authorOlid, workOlid } = await getOpenLibraryAuthorIdByISBN(
+    book.isbn!
+  );
 
   if (!authorOlid) {
-    return getOpenLibraryAuthorByName(book.author!);
+    const author = await getOpenLibraryAuthorByName(book.author!);
+    return {
+      author,
+      olid: workOlid,
+    };
   }
 
   return {
-    olid: authorOlid,
+    author: {
+      olid: authorOlid,
+    },
+    olid: workOlid,
   };
 }
 
@@ -226,19 +237,39 @@ async function getOpenLibraryAuthorByName(name: string) {
 }
 
 async function getOpenLibraryAuthorIdByISBN(isbn: string) {
-  const workResponse = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+  const editionResponse = await fetch(
+    `https://openlibrary.org/isbn/${isbn}.json`
+  );
 
-  if (workResponse.status !== 200) {
-    return;
+  if (editionResponse.status !== 200) {
+    return { authorOlid: null, workOlid: null };
   }
+
+  const edition = await editionResponse.json();
+
+  if (!edition || !edition.authors) {
+    return { authorOlid: null, workOlid: null };
+  }
+
+  const olid = edition.works[0].key.replaceAll('/works/', '');
+
+  const workResponse = await fetch(
+    `https://openlibrary.org/works/${olid}.json`
+  );
 
   const work = await workResponse.json();
 
-  if (!work || !work.authors) {
-    return;
-  }
+  let authorOlid;
 
-  return work.authors[0].key.replaceAll('/authors/', '');
+  authorOlid =
+    work.authors &&
+    work.authors.length > 0 &&
+    work.authors[0].author?.key?.replaceAll('/authors/', '');
+
+  return {
+    authorOlid,
+    workOlid: olid,
+  };
 }
 
 async function getUser(db: Client, userId: string) {
@@ -286,10 +317,10 @@ async function insertBook(
     rows: [foundBook],
   } = await db.query(
     `
-      SELECT b.id, b.isbn FROM "Books" b
-      WHERE b.isbn = $1
+      SELECT b.id, b.olid FROM "Books" b
+      WHERE b.olid = $1 or b.isbn = $2
     `,
-    [book.isbn]
+    [book.olid, book.isbn]
   );
 
   if (foundBook) {
@@ -307,8 +338,8 @@ async function insertBook(
     rows: [{ id }],
   } = await db.query(
     `
-      INSERT INTO "Books" ("id", "name", "description", "subjects", "authorId", "isbn", "source", "priority", "goodCover", "createdAt", "updatedAt")
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      INSERT INTO "Books" (id, name, description, subjects, "authorId", isbn, olid, source, priority, "goodCover", "createdAt", "updatedAt")
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING id
     `,
     [
@@ -318,6 +349,7 @@ async function insertBook(
       book.subjects,
       authorId,
       book.isbn,
+      book.olid,
       'CHAT_GPT_RECOMMENDATION',
       0,
       goodCover,
@@ -684,7 +716,7 @@ function isBoxSet(title: string, edition?: string | number) {
 type DbBook = {
   id?: string;
   cover?: string;
-  olid?: string;
+  olid?: string | null;
   isbn?: string;
   name: string;
   description?: string;
