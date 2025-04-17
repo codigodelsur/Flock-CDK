@@ -117,6 +117,18 @@ new FlockNotificationsStack(app, 'FlockNotificationsStack-Dev', 'dev', {
   env,
 });
 
+new FlockNotificationsStack(app, 'FlockNotificationsStack-Stage', 'stage', {
+  stackName: 'flock-notifications-stage',
+  env,
+});
+
+new FlockNotificationsStack(app, 'FlockNotificationsStack-Prod', 'prod', {
+  stackName: 'flock-notifications-prod',
+  env,
+  masterUserSecret: apiStackProd.masterUserSecret,
+  vpc: apiStackProd.vpc,
+});
+
 new FlockBookRefreshingStack(app, 'FlockBookRefreshingStack-Dev', 'dev', {
   stackName: 'flock-book-refreshing-dev',
   env,

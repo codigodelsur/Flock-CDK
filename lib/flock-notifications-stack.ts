@@ -28,12 +28,6 @@ export class FlockNotificationsStack extends Stack {
 
     const dbCredentials = getDBCredentials(workload, props.masterUserSecret!);
 
-    const isbnDBKeySecret = Secret.fromSecretNameV2(
-      this,
-      'isbndb-key',
-      'isbndb-key'
-    );
-
     const handler = new NodejsFunction(
       this,
       `notifications-handler-${workload}`,
