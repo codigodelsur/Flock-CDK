@@ -30,7 +30,7 @@ Stack for the API
 - AppRunner
 
 ```bash
-npx cdk deploy FlockApiStack-Dev
+npx cdk deploy FlockApiStack-<Env>
 ```
 
 ### Recommendation Stack
@@ -44,7 +44,7 @@ Stack for the Recommendation Engine
 - Lambda
 
 ```bash
-npx cdk deploy FlockRecommendationStack-Dev
+npx cdk deploy FlockRecommendationStack-<Env>
 ```
 
 ### Book Data Population Stack
@@ -59,7 +59,7 @@ details to each book in a parallel service.
 - Lambda
 
 ```bash
-npx cdk deploy FlockBookDataPopulationStack-Dev
+npx cdk deploy FlockBookDataPopulationStack-<Env>
 ```
 
 ### Book Sync Stack
@@ -73,7 +73,35 @@ Stack for the Book Sync service, which retrieves data from NY Times Best Seller 
 - Lambda
 
 ```bash
-npx cdk deploy FlockBookSyncStack-Dev
+npx cdk deploy FlockBookSyncStack-<Env>
+```
+
+### Notifications Stack
+
+Stack for recurring Push Notifications creation
+
+#### Services
+
+- SNS topic
+- SQS queue
+- Lambda
+
+```bash
+npx cdk deploy FlockNotificationsStack-<Env>
+```
+
+### Book Refreshing Stack
+
+Stack for new covers downloading
+
+#### Services
+
+- SNS topic
+- SQS queue
+- Lambda
+
+```bash
+npx cdk deploy FlockBookRefreshingStack-<Env>
 ```
 
 ## Create CDKToolkit
