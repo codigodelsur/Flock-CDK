@@ -300,6 +300,14 @@ export class FlockApiStack extends cdk.Stack {
       })
     );
 
+    instanceRole.addToPolicy(
+      new PolicyStatement({
+        resources: ['*'],
+        actions: ['ses:SendRawEmail'],
+        effect: Effect.ALLOW,
+      })
+    );
+
     const appRunnerService = new CfnService(
       this,
       `${this.stackName}-apprunner-service`,
