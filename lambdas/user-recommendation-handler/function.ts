@@ -291,7 +291,7 @@ async function getCandidates(db: Client, userId: string) {
   const { rows: candidateIds } = await db.query(
     `
       SELECT u.id FROM "Users" u
-      WHERE u.id != $1 AND u."deletedAt" IS NULL
+      WHERE u.id != $1 AND u."deletedAt" IS NULL AND u."username" != 'Deleted User'
     `,
     [userId]
   );
